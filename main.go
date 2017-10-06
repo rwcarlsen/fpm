@@ -26,15 +26,30 @@ func main() {
 	coeffs := [][]float64{
 		{1, 1, 1, 1, 1, 1, 1, 1, 1},
 		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
+		{1, 1, 1, 1, 1, 1, 1, 1, 1},
 	}
 	pts := [][]float64{
 		{0, 0},
 		{1, 2},
+		{0, 0},
+		{0, 0},
+		{0, 0},
+	}
+	orders := [][]int{
+		{0, 0},
+		{1, 0},
+		{0, 1},
+		{1, 1},
+		{0, 2},
 	}
 
 	for i := range coeffs {
 		v := bf.Val(coeffs[i], pts[i])
+		deriv := bf.Deriv(coeffs[i], pts[i], orders[i])
 		fmt.Printf("basisfunc%v=%v\n", pts[i], v)
+		fmt.Printf("partial func%v wrt %v = %v\n", pts[i], orders[i], deriv)
 	}
 }
 
@@ -50,7 +65,7 @@ func (b *BasisFunc) init() {
 		for i := range dims {
 			dims[i] = b.Degree + 1
 		}
-		b.perms = Permute(dims...)
+		b.perms = Permute(0, dims...)
 	}
 }
 
@@ -65,13 +80,41 @@ func (b *BasisFunc) Val(coeffs, x []float64) float64 {
 	tot := 0.0
 	for i, perm := range b.perms {
 		cum := coeffs[i]
-		fmt.Printf("    term %v=1", i)
 		for dim, exp := range perm {
-			fmt.Printf("*dim%v^%v", dim+1, exp)
 			cum *= math.Pow(x[dim], float64(exp))
 		}
-		fmt.Println()
 		tot += cum
+	}
+	return tot
+}
+
+func (b *BasisFunc) Deriv(coeffs, x []float64, orders []int) float64 {
+	b.init()
+	if len(x) != b.Dim {
+		panic(fmt.Sprintf("wrong dimension for x: want %v, got %v", b.Dim, len(x)))
+	} else if len(orders) != b.Dim {
+		panic(fmt.Sprintf("wrong number of derivative orders: want %v, got %v", b.Dim, len(orders)))
+	}
+
+	tot := 0.0
+	for i, perm := range b.perms {
+		cum := coeffs[i]
+		for dim, exp := range perm {
+			if orders[dim] > exp {
+				cum *= 0
+				break
+			}
+			cum *= float64(factorial(exp-orders[dim], exp)) * math.Pow(x[dim], float64(exp)-float64(orders[dim]))
+		}
+		tot += cum
+	}
+	return tot
+}
+
+func factorial(low, up int) int {
+	tot := 1
+	for i := low; i <= up; i++ {
+		tot *= i
 	}
 	return tot
 }
@@ -142,17 +185,32 @@ func (ps PointSet) Nearest(p *Point, n int) []int {
 	return nearest
 }
 
-func Permute(dimensions ...int) [][]int {
-	return permute(dimensions, make([]int, 0, len(dimensions)))
+func Permute(maxsum int, dimensions ...int) [][]int {
+	return permute(maxsum, dimensions, make([]int, 0, len(dimensions)))
 }
 
-func permute(dimensions []int, prefix []int) [][]int {
+func sum(vals ...int) int {
+	tot := 0
+	for _, val := range vals {
+		tot += val
+	}
+	return tot
+}
+
+func permute(maxsum int, dimensions []int, prefix []int) [][]int {
 	set := make([][]int, 0)
+
+	if maxsum > 0 && sum(prefix...) >= maxsum {
+		set = [][]int{append(append([]int{}, prefix...), make([]int, len(dimensions))...)}
+		return set
+	}
 
 	if len(dimensions) == 1 {
 		for i := 0; i < dimensions[0]; i++ {
 			val := append(append([]int{}, prefix...), i)
-			set = append(set, val)
+			if maxsum == 0 || sum(val...) <= maxsum {
+				set = append(set, val)
+			}
 		}
 		return set
 	}
@@ -160,7 +218,7 @@ func permute(dimensions []int, prefix []int) [][]int {
 	max := dimensions[0]
 	for i := 0; i < max; i++ {
 		newprefix := append(prefix, i)
-		moresets := permute(dimensions[1:], newprefix)
+		moresets := permute(maxsum, dimensions[1:], newprefix)
 		set = append(set, moresets...)
 	}
 	return set
