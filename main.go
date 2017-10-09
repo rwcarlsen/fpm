@@ -65,8 +65,36 @@ func (b *BasisFunc) init() {
 		for i := range dims {
 			dims[i] = b.Degree + 1
 		}
-		b.perms = Permute(0, dims...)
+		b.perms = Permute(b.Degree, dims...)
 	}
+}
+
+// TermsAtZero calculates and returns the multiplier (due to derivaties) on the monomial that
+// matches the set of derivative orders (nth derivative for each dimension/variable) and its
+// associated index.  This is equivalent to the partial derivative described by derivOrders of the
+// basis function evaluated at X=0 (all dimensions zero).
+func (b *BasisFunc) TermsAtZero(derivOrders []int) (index int, multiplier float64) {
+	b.init()
+	if len(derivOrders) != b.Dim {
+		panic(fmt.Sprintf("wrong number of derivative orders: want %v, got %v", b.Dim, len(derivOrders)))
+	}
+
+outer:
+	for i, perm := range b.perms {
+		fmt.Printf("comparing perm %v to derivOrders %v\n", perm, derivOrders)
+		for dim, exp := range perm {
+			if exp != derivOrders[dim] {
+				continue outer
+			}
+		}
+		mult := 1.0
+		for _, exp := range perm {
+			mult *= float64(factorial(0, exp))
+			fmt.Printf("    perm matches, mult=%v\n", mult)
+		}
+		return i, mult
+	}
+	return -1, 0
 }
 
 func (b *BasisFunc) Val(coeffs, x []float64) float64 {
@@ -113,8 +141,8 @@ func (b *BasisFunc) Deriv(coeffs, x []float64, orders []int) float64 {
 
 func factorial(low, up int) int {
 	tot := 1
-	for i := low; i <= up; i++ {
-		tot *= i
+	for i := low; i < up; i++ {
+		tot *= i + 1
 	}
 	return tot
 }
