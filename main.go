@@ -53,6 +53,31 @@ func main() {
 	}
 }
 
+type WeightFunc interface {
+	Weight(xref, xrel []float64) float64
+}
+
+// NormGauss implements a compatly supported radial basis function using the normalized Gaussian
+// function.  The value of the type is the support range/distance for the neighborhood for which
+// weights are being calculated.
+type NormGauss struct {
+	// The value of the type is the support range/distance for the neighborhood for which
+	// weights are being calculated.
+	Rho float64
+	// Epsilon is the shape parameter
+	Epsilon float64
+}
+
+func (n NormGauss) Weight(xref, xrel []float64) float64 {
+	tot := 0.0
+	for i := range xrel {
+		diff := xrel[i] - xref[i]
+		tot += diff * diff
+	}
+	dist := math.Sqrt(tot)
+	return (math.Exp(-n.Epsilon*math.Pow(dist/n.Rho, 2)) - math.Exp(-n.Epsilon)) / (1 - math.Exp(-n.Epsilon))
+}
+
 type BasisFunc struct {
 	Dim    int
 	Degree int
@@ -65,15 +90,15 @@ func (b *BasisFunc) init() {
 		for i := range dims {
 			dims[i] = b.Degree + 1
 		}
-		b.perms = Permute(b.Degree, dims...)
+		b.perms = Permute(0, dims...)
 	}
 }
 
-// TermsAtZero calculates and returns the multiplier (due to derivaties) on the monomial that
+// TermAtZero calculates and returns the multiplier (due to derivaties) on the monomial that
 // matches the set of derivative orders (nth derivative for each dimension/variable) and its
 // associated index.  This is equivalent to the partial derivative described by derivOrders of the
 // basis function evaluated at X=0 (all dimensions zero).
-func (b *BasisFunc) TermsAtZero(derivOrders []int) (index int, multiplier float64) {
+func (b *BasisFunc) TermAtZero(derivOrders []int) (index int, multiplier float64) {
 	b.init()
 	if len(derivOrders) != b.Dim {
 		panic(fmt.Sprintf("wrong number of derivative orders: want %v, got %v", b.Dim, len(derivOrders)))
@@ -81,7 +106,6 @@ func (b *BasisFunc) TermsAtZero(derivOrders []int) (index int, multiplier float6
 
 outer:
 	for i, perm := range b.perms {
-		fmt.Printf("comparing perm %v to derivOrders %v\n", perm, derivOrders)
 		for dim, exp := range perm {
 			if exp != derivOrders[dim] {
 				continue outer
@@ -90,7 +114,6 @@ outer:
 		mult := 1.0
 		for _, exp := range perm {
 			mult *= float64(factorial(0, exp))
-			fmt.Printf("    perm matches, mult=%v\n", mult)
 		}
 		return i, mult
 	}
