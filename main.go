@@ -2,59 +2,189 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
+
+	"github.com/gonum/matrix/mat64"
 
 	"sort"
 )
 
 func main() {
-	ps := PointSet{
-		NewPoint(0, 0, 0),
-		NewPoint(0, 0, 1),
-		NewPoint(0, 1, 1),
-		NewPoint(1, 1, 1),
+	// construct and solve grid using Finite point method:
+	n := 25
+	const nnearest = 3
+	const degree = 2
+	kern := Laplace{}
+
+	pts := make([]*Point, n)
+	for i := 0; i < n; i++ {
+		pts[i] = NewPoint(float64(i))
 	}
 
-	p := NewPoint(0, 1, 1)
+	basisfn := BasisFunc{Dim: len(pts[0].X), Degree: degree}
 
-	fmt.Printf("nearest 1 to %v: %v\n", p, ps.Nearest(p, 1))
-	fmt.Printf("nearest 2 to %v: %v\n", p, ps.Nearest(p, 2))
-	fmt.Printf("nearest 3 to %v: %v\n", p, ps.Nearest(p, 3))
-
-	bf := &BasisFunc{Dim: 2, Degree: 2}
-
-	coeffs := [][]float64{
-		{1, 1, 1, 1, 1, 1, 1, 1, 1},
-		{1, 1, 1, 1, 1, 1, 1, 1, 1},
-		{1, 1, 1, 1, 1, 1, 1, 1, 1},
-		{1, 1, 1, 1, 1, 1, 1, 1, 1},
-		{1, 1, 1, 1, 1, 1, 1, 1, 1},
-	}
-	pts := [][]float64{
-		{0, 0},
-		{1, 2},
-		{0, 0},
-		{0, 0},
-		{0, 0},
-	}
-	orders := [][]int{
-		{0, 0},
-		{1, 0},
-		{0, 1},
-		{1, 1},
-		{0, 2},
+	rhs := make([]float64, len(pts))
+	kp := &KernelParams{Basis: basisfn}
+	for i, pref := range pts {
+		kp.X = pref.X
+		rhs[i] = kern.RHS(kp)
 	}
 
-	for i := range coeffs {
-		v := bf.Val(coeffs[i], pts[i])
-		deriv := bf.Deriv(coeffs[i], pts[i], orders[i])
-		fmt.Printf("basisfunc%v=%v\n", pts[i], v)
-		fmt.Printf("partial func%v wrt %v = %v\n", pts[i], orders[i], deriv)
+	A := mat64.NewDense(len(pts), len(pts), nil)
+	for i, pref := range pts {
+		xref := pref.X
+		kp.X = xref
+
+		indices, nearest := Nearest(nnearest, xref, pts)
+
+		farthest := nearest[len(nearest)-1]
+		rho := 0.0
+		for j := range farthest.X {
+			diff := farthest.X[j] - xref[j]
+			rho += diff * diff
+		}
+
+		// set weight function support distance to 1.5 times the distance to the farthest point in
+		// the reference point's neighborhood.
+		weightfn := NormGauss{Rho: 1.5 * math.Sqrt(rho), Epsilon: 1}
+
+		fmt.Printf("reference point %v, x = %v\n", i+1, xref)
+		fmt.Printf("    indices = %v\n", indices)
+
+		pref.SetNeighbors(weightfn, basisfn, nearest)
+		lambda := pref.LambdaMatrix()
+		fmt.Printf("    lambda%v=\n% .3v\n", i+1, mat64.Formatted(lambda))
+
+		for k, j := range indices {
+			// j is the global index of the k'th local node for the approximation of the
+			// neighborhood around global node/point i (i.e. xref).
+			kp.Lambdas = make([]float64, basisfn.NumMonomials())
+			for m := range kp.Lambdas {
+				kp.Lambdas[m] = lambda.At(m, k)
+			}
+			fmt.Printf("        lambdas=%v\n", kp.Lambdas)
+			A.Set(i, j, kern.LHS(kp)*weightfn.Weight(xref, nearest[k].X))
+		}
+	}
+	fmt.Printf("A=\n% .1v\n", mat64.Formatted(A))
+
+	// need to add boundary conditions
+
+	var soln mat64.Vector
+	err := soln.SolveVec(A, mat64.NewVector(len(rhs), rhs))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("x=", soln.RawVector().Data)
+}
+
+type Point struct {
+	X []float64
+	// weights is the weight for each neighbor of X
+	weights   []float64
+	neighbors []*Point
+	Phi       float64
+	coeffs    []float64
+	bf        BasisFunc
+	wf        WeightFunc
+}
+
+func NewPoint(x ...float64) *Point { return &Point{X: x} }
+
+// SolveCoeffs computes the approximated solution's monomial coefficients using the Phi values of
+// all nodes in this point's neighborhood (i.e. Lambda*[w_k*phi_k]).  All Phi values for this node
+// and its neighbors must have already been calculated+set.
+func (p *Point) SolveCoeffs() {
+	v := mat64.NewVector(len(p.neighbors), nil)
+	for i, neighbor := range p.neighbors {
+		v.SetVec(i, neighbor.Phi*p.weights[i])
+	}
+
+	p.coeffs = make([]float64, p.bf.NumMonomials())
+	soln := mat64.NewVector(len(p.coeffs), p.coeffs)
+	soln.MulVec(p.LambdaMatrix(), soln)
+}
+
+func (p *Point) Interpolate(x []float64) float64 {
+	tot := 0.0
+	for i, coeff := range p.coeffs {
+		tot += p.bf.MonomialVal(i, x) * coeff
+	}
+	return tot
+}
+
+func (p *Point) LambdaMatrix() *mat64.Dense {
+	r, c := len(p.neighbors), p.bf.NumMonomials()
+	A := mat64.NewDense(r, c, nil)
+
+	for k, neighbor := range p.neighbors {
+		xrel := make([]float64, len(p.X))
+		for i := range neighbor.X {
+			xrel[i] = neighbor.X[i] - p.X[i]
+		}
+
+		fmt.Printf("    xrel=%v, weight=%v\n", xrel, p.weights[k])
+		for i := 0; i < c; i++ {
+			A.Set(k, i, p.weights[k]*p.bf.MonomialVal(i, xrel))
+			fmt.Printf("        LambdaMat[%v,%v]=%v, monomial=%v\n", k, i, A.At(k, i), p.bf.MonomialVal(i, xrel))
+		}
+	}
+
+	var tmp mat64.Dense
+	tmp.Mul(A.T(), A)
+	fmt.Printf("    A^T=\n% .3v\n", mat64.Formatted(A.T()))
+	fmt.Printf("    A^T*A=\n% .3v\n", mat64.Formatted(&tmp))
+
+	var lambda mat64.Dense
+	err := lambda.Solve(&tmp, A.T())
+	if err != nil {
+		log.Fatal(err)
+	}
+	return &lambda
+}
+
+// SetNeighbors tells the point what other points are in its local neighborhood and initiates the
+// computation of the Lambda matrix used for interpolating and building the global system to solve
+// the differential equation(s).
+func (p *Point) SetNeighbors(wf WeightFunc, bf BasisFunc, neighbors []*Point) {
+	p.neighbors = neighbors
+	p.bf, p.wf = bf, wf
+
+	p.weights = make([]float64, len(neighbors))
+	for k, neighbor := range neighbors {
+		p.weights[k] = math.Sqrt(wf.Weight(p.X, neighbor.X))
 	}
 }
 
+type KernelParams struct {
+	X       []float64
+	Basis   BasisFunc
+	Lambdas []float64
+}
+
+type Kernel interface {
+	LHS(kp *KernelParams) float64
+	RHS(kp *KernelParams) float64
+}
+
+type Laplace struct{}
+
+func (d Laplace) LHS(kp *KernelParams) float64 {
+	// del squared phi - need to do each dimension
+	tot := 0.0
+	for d := 0; d < kp.Basis.Dim; d++ {
+		derivs := make([]int, kp.Basis.Dim)
+		derivs[d] = 2
+		i, mult := kp.Basis.TermAtZero(derivs...)
+		tot += -mult * kp.Lambdas[i]
+	}
+	return tot
+}
+func (d Laplace) RHS(kp *KernelParams) float64 { return 0 }
+
 type WeightFunc interface {
-	Weight(xref, xrel []float64) float64
+	Weight(xref, x []float64) float64
 }
 
 // NormGauss implements a compatly supported radial basis function using the normalized Gaussian
@@ -68,18 +198,26 @@ type NormGauss struct {
 	Epsilon float64
 }
 
-func (n NormGauss) Weight(xref, xrel []float64) float64 {
+func (n NormGauss) Weight(xref, x []float64) float64 {
 	tot := 0.0
-	for i := range xrel {
-		diff := xrel[i] - xref[i]
+	for i := range x {
+		diff := x[i] - xref[i]
 		tot += diff * diff
 	}
 	dist := math.Sqrt(tot)
+
+	if dist > n.Rho {
+		return 0
+	}
 	return (math.Exp(-n.Epsilon*math.Pow(dist/n.Rho, 2)) - math.Exp(-n.Epsilon)) / (1 - math.Exp(-n.Epsilon))
 }
 
 type BasisFunc struct {
-	Dim    int
+	Dim int
+	// Degree should generally be at least as much as the order of the differential equation being
+	// solved.  More accurately, the number of monomials in the basis function needs to be greater
+	// than the order of the differential equation - the number of monomials is a function of both
+	// Degree and Dim.
 	Degree int
 	perms  [][]int
 }
@@ -90,7 +228,8 @@ func (b *BasisFunc) init() {
 		for i := range dims {
 			dims[i] = b.Degree + 1
 		}
-		b.perms = Permute(0, dims...)
+		b.perms = Permute(b.Degree, dims...)
+		fmt.Println("basisfunc-monomials=", b.perms)
 	}
 }
 
@@ -98,7 +237,7 @@ func (b *BasisFunc) init() {
 // matches the set of derivative orders (nth derivative for each dimension/variable) and its
 // associated index.  This is equivalent to the partial derivative described by derivOrders of the
 // basis function evaluated at X=0 (all dimensions zero).
-func (b *BasisFunc) TermAtZero(derivOrders []int) (index int, multiplier float64) {
+func (b *BasisFunc) TermAtZero(derivOrders ...int) (index int, multiplier float64) {
 	b.init()
 	if len(derivOrders) != b.Dim {
 		panic(fmt.Sprintf("wrong number of derivative orders: want %v, got %v", b.Dim, len(derivOrders)))
@@ -117,7 +256,28 @@ outer:
 		}
 		return i, mult
 	}
-	return -1, 0
+	return 0, 0
+}
+
+func (b *BasisFunc) NumMonomials() int {
+	b.init()
+	return len(b.perms)
+}
+
+func (b *BasisFunc) MonomialVal(i int, x []float64) float64 {
+	b.init()
+	if len(x) != b.Dim {
+		panic(fmt.Sprintf("wrong dimension for x: want %v, got %v", b.Dim, len(x)))
+	} else if i < 0 || i >= len(b.perms) {
+		panic(fmt.Sprintf("invalid monomial index %v", i))
+	}
+
+	mon := b.perms[i]
+	cum := 1.0
+	for dim, exp := range mon {
+		cum *= math.Pow(x[dim], float64(exp))
+	}
+	return cum
 }
 
 func (b *BasisFunc) Val(coeffs, x []float64) float64 {
@@ -170,70 +330,31 @@ func factorial(low, up int) int {
 	return tot
 }
 
-type Point struct {
-	X      []float64
-	Coeffs []float64
-}
-
-func NewPoint(xs ...float64) *Point {
-	return &Point{X: xs}
-}
-
-func (p *Point) init(x *Point) {
-	if len(p.X) != len(x.X) {
-		p.X = make([]float64, len(x.X))
-	}
-}
-
-func (p *Point) Add(p1, p2 *Point) {
-	p.init(p1)
-	for i := range p.X {
-		p.X[i] = p1.X[i] + p2.X[i]
-	}
-}
-
-func (p *Point) Sub(p1, p2 *Point) {
-	p.init(p1)
-	for i := range p.X {
-		p.X[i] = p2.X[i] - p1.X[i]
-	}
-}
-
-func (p *Point) L2Norm() float64 {
+func L2DistSquared(a, b []float64) float64 {
 	tot := 0.0
-	for _, x := range p.X {
-		tot += x * x
+	for i := range a {
+		diff := a[i] - b[i]
+		tot += diff * diff
 	}
-	return math.Sqrt(tot)
+	return tot
 }
 
-func (p *Point) Dist(y *Point) float64 {
-	var diff Point
-	diff.Sub(p, y)
-	return diff.L2Norm()
-}
-
-type PointSet []*Point
-
-func (ps PointSet) LocalSolution(i int) float64 {
-	panic("unimplemented")
-}
-
-func (ps PointSet) Nearest(p *Point, n int) []int {
-	sorted := make([]int, len(ps))
+func Nearest(n int, x []float64, pts []*Point) (indices []int, nearest []*Point) {
+	sorted := make([]int, len(pts))
 	for i := range sorted {
 		sorted[i] = i
 	}
 	sort.Slice(sorted, func(i, j int) bool {
-		return ps[sorted[i]].Dist(p) < ps[sorted[j]].Dist(p)
+		return L2DistSquared(pts[sorted[i]].X, x) < L2DistSquared(pts[sorted[j]].X, x)
 	})
 
-	nearest := make([]int, n)
+	nearest = make([]*Point, n)
+	indices = make([]int, n)
 	for i := range nearest {
-		nearest[i] = sorted[i]
+		indices[i] = sorted[i]
+		nearest[i] = pts[sorted[i]]
 	}
-
-	return nearest
+	return indices, nearest
 }
 
 func Permute(maxsum int, dimensions ...int) [][]int {
@@ -265,7 +386,6 @@ func permute(maxsum int, dimensions []int, prefix []int) [][]int {
 		}
 		return set
 	}
-
 	max := dimensions[0]
 	for i := 0; i < max; i++ {
 		newprefix := append(prefix, i)

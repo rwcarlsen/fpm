@@ -16,7 +16,7 @@ func TestBasisFunc_TermAtZero(t *testing.T) {
 		{dims: 2, degree: 1, derivOrders: []int{0, 0}, want: 1},
 		{dims: 2, degree: 1, derivOrders: []int{1, 0}, want: 1},
 		{dims: 2, degree: 1, derivOrders: []int{0, 1}, want: 1},
-		{dims: 2, degree: 1, derivOrders: []int{1, 1}, want: 1},
+		{dims: 2, degree: 1, derivOrders: []int{1, 1}, want: 0},
 		{dims: 2, degree: 1, derivOrders: []int{1, 2}, want: 0},
 		{dims: 2, degree: 2, derivOrders: []int{0, 0}, want: 1},
 		{dims: 2, degree: 2, derivOrders: []int{1, 0}, want: 1},
@@ -33,7 +33,7 @@ func TestBasisFunc_TermAtZero(t *testing.T) {
 	const tol = 1e-6
 	for i, test := range tests {
 		bf := &BasisFunc{Dim: test.dims, Degree: test.degree}
-		_, got := bf.TermAtZero(test.derivOrders)
+		_, got := bf.TermAtZero(test.derivOrders...)
 		t.Run(fmt.Sprintf("case%v", i+1), testFloat(got, test.want, tol, "dims=%v, degree=%v, derivs=%v: ", test.dims, test.degree, test.derivOrders))
 	}
 }
@@ -45,10 +45,10 @@ func TestBasisFunc_Val(t *testing.T) {
 		degree int
 		want   float64
 	}{
-		{degree: 1, coeffs: []float64{1, 1, 1, 1}, x: []float64{0, 0}, want: 1},
-		{degree: 1, coeffs: []float64{1, 1, 1, 1}, x: []float64{1, 0}, want: 2},
-		{degree: 1, coeffs: []float64{1, 1, 1, 1}, x: []float64{0, 1}, want: 2},
-		{degree: 1, coeffs: []float64{1, 1, 1, 1}, x: []float64{1, 1}, want: 4},
+		{degree: 1, coeffs: []float64{1, 1, 1}, x: []float64{0, 0}, want: 1},
+		{degree: 1, coeffs: []float64{1, 1, 1}, x: []float64{1, 0}, want: 2},
+		{degree: 1, coeffs: []float64{1, 1, 1}, x: []float64{0, 1}, want: 2},
+		{degree: 1, coeffs: []float64{1, 1, 1}, x: []float64{1, 1}, want: 3},
 	}
 
 	const tol = 1e-6
@@ -75,7 +75,7 @@ func TestPermute(t *testing.T) {
 	}{
 		{
 			dims:   []int{2, 2},
-			maxsum: 2,
+			maxsum: 1,
 			want: [][]int{
 				{0, 0},
 				{0, 1},
