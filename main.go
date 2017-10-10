@@ -10,12 +10,52 @@ import (
 	"sort"
 )
 
+type KernelParams struct {
+	Index   int
+	X       []float64
+	Basis   BasisFunc
+	Lambdas []float64
+}
+
+type Boundaries map[int]Kernel
+
+type Kernel interface {
+	LHS(kp *KernelParams) float64
+	RHS(kp *KernelParams) float64
+}
+
+type GradientN struct {
+	Order int
+	Rhs   float64
+}
+
+type KernelMult struct {
+	Kernel
+	Mult float64
+}
+
+func (g KernelMult) LHS(kp *KernelParams) float64 { return g.Mult * g.Kernel.LHS(kp) }
+
+func (g GradientN) LHS(kp *KernelParams) float64 {
+	// del squared phi - need to do each dimension
+	tot := 0.0
+	for d := 0; d < kp.Basis.Dim; d++ {
+		derivs := make([]int, kp.Basis.Dim)
+		derivs[d] = g.Order
+		i, mult := kp.Basis.TermAtZero(derivs...)
+		tot += mult * kp.Lambdas[i]
+	}
+	return tot
+}
+func (g GradientN) RHS(kp *KernelParams) float64 { return g.Rhs }
+
 func main() {
 	// construct and solve grid using Finite point method:
-	n := 25
+	const n = 10
 	const nnearest = 3
 	const degree = 2
-	kern := Laplace{}
+	kern := GradientN{Order: 2}
+	bounds := Boundaries{0: GradientN{Order: 0, Rhs: 3}, (n - 1): GradientN{Order: 0, Rhs: 7}}
 
 	pts := make([]*Point, n)
 	for i := 0; i < n; i++ {
@@ -28,7 +68,11 @@ func main() {
 	kp := &KernelParams{Basis: basisfn}
 	for i, pref := range pts {
 		kp.X = pref.X
-		rhs[i] = kern.RHS(kp)
+		if bkern, ok := bounds[i]; ok {
+			rhs[i] = bkern.RHS(kp)
+		} else {
+			rhs[i] = kern.RHS(kp)
+		}
 	}
 
 	A := mat64.NewDense(len(pts), len(pts), nil)
@@ -47,7 +91,7 @@ func main() {
 
 		// set weight function support distance to 1.5 times the distance to the farthest point in
 		// the reference point's neighborhood.
-		weightfn := NormGauss{Rho: 1.5 * math.Sqrt(rho), Epsilon: 1}
+		weightfn := NormGauss{Rho: 1.5 * math.Sqrt(rho), Epsilon: .1}
 
 		fmt.Printf("reference point %v, x = %v\n", i+1, xref)
 		fmt.Printf("    indices = %v\n", indices)
@@ -64,7 +108,11 @@ func main() {
 				kp.Lambdas[m] = lambda.At(m, k)
 			}
 			fmt.Printf("        lambdas=%v\n", kp.Lambdas)
-			A.Set(i, j, kern.LHS(kp)*weightfn.Weight(xref, nearest[k].X))
+			if bkern, ok := bounds[i]; ok {
+				A.Set(i, j, bkern.LHS(kp)*weightfn.Weight(xref, nearest[k].X))
+			} else {
+				A.Set(i, j, kern.LHS(kp)*weightfn.Weight(xref, nearest[k].X))
+			}
 		}
 	}
 	fmt.Printf("A=\n% .1v\n", mat64.Formatted(A))
@@ -76,7 +124,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("rhs=", rhs)
 	fmt.Println("x=", soln.RawVector().Data)
+
+	for i, val := range soln.RawVector().Data {
+		pts[i].Phi = val
+		pts[i].SolveCoeffs()
+		fmt.Println(i, val)
+	}
 }
 
 type Point struct {
@@ -103,13 +158,19 @@ func (p *Point) SolveCoeffs() {
 
 	p.coeffs = make([]float64, p.bf.NumMonomials())
 	soln := mat64.NewVector(len(p.coeffs), p.coeffs)
-	soln.MulVec(p.LambdaMatrix(), soln)
+	soln.MulVec(p.LambdaMatrix(), v)
+	fmt.Println("coeffs of ", p.X, ":", p.coeffs)
 }
 
 func (p *Point) Interpolate(x []float64) float64 {
+	xrel := make([]float64, len(p.X))
+	for i := range x {
+		xrel[i] = x[i] - p.X[i]
+	}
+
 	tot := 0.0
 	for i, coeff := range p.coeffs {
-		tot += p.bf.MonomialVal(i, x) * coeff
+		tot += p.bf.MonomialVal(i, xrel) * coeff
 	}
 	return tot
 }
@@ -133,7 +194,7 @@ func (p *Point) LambdaMatrix() *mat64.Dense {
 
 	var tmp mat64.Dense
 	tmp.Mul(A.T(), A)
-	fmt.Printf("    A^T=\n% .3v\n", mat64.Formatted(A.T()))
+	fmt.Printf("    A=\n% .3v\n", mat64.Formatted(A))
 	fmt.Printf("    A^T*A=\n% .3v\n", mat64.Formatted(&tmp))
 
 	var lambda mat64.Dense
@@ -141,6 +202,7 @@ func (p *Point) LambdaMatrix() *mat64.Dense {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf("    lambda=\n% .3v\n", mat64.Formatted(&lambda))
 	return &lambda
 }
 
@@ -156,32 +218,6 @@ func (p *Point) SetNeighbors(wf WeightFunc, bf BasisFunc, neighbors []*Point) {
 		p.weights[k] = math.Sqrt(wf.Weight(p.X, neighbor.X))
 	}
 }
-
-type KernelParams struct {
-	X       []float64
-	Basis   BasisFunc
-	Lambdas []float64
-}
-
-type Kernel interface {
-	LHS(kp *KernelParams) float64
-	RHS(kp *KernelParams) float64
-}
-
-type Laplace struct{}
-
-func (d Laplace) LHS(kp *KernelParams) float64 {
-	// del squared phi - need to do each dimension
-	tot := 0.0
-	for d := 0; d < kp.Basis.Dim; d++ {
-		derivs := make([]int, kp.Basis.Dim)
-		derivs[d] = 2
-		i, mult := kp.Basis.TermAtZero(derivs...)
-		tot += -mult * kp.Lambdas[i]
-	}
-	return tot
-}
-func (d Laplace) RHS(kp *KernelParams) float64 { return 0 }
 
 type WeightFunc interface {
 	Weight(xref, x []float64) float64
@@ -206,7 +242,7 @@ func (n NormGauss) Weight(xref, x []float64) float64 {
 	}
 	dist := math.Sqrt(tot)
 
-	if dist > n.Rho {
+	if dist >= n.Rho {
 		return 0
 	}
 	return (math.Exp(-n.Epsilon*math.Pow(dist/n.Rho, 2)) - math.Exp(-n.Epsilon)) / (1 - math.Exp(-n.Epsilon))
