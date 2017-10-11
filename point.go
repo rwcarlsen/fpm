@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"math"
 
 	"github.com/gonum/matrix/mat64"
@@ -42,7 +42,9 @@ func (p *Point) Interpolate(x []float64) float64 {
 
 	tot := 0.0
 	for i, coeff := range p.coeffs {
-		tot += p.bf.MonomialVal(i, xrel) * coeff
+		v := p.bf.MonomialVal(i, xrel) * coeff
+		fmt.Printf("monomial %.3v*x^%v at x=%v is %.3v\n", coeff, p.bf.perms[i][0], xrel[0], v)
+		tot += v
 	}
 	return tot
 }
@@ -74,7 +76,7 @@ func (p *Point) LambdaMatrix() *mat64.Dense {
 	var lambda mat64.Dense
 	err := lambda.Solve(&tmp, A.T())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return &lambda
 }

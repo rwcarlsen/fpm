@@ -30,12 +30,14 @@ func (n NormGauss) Weight(xref, x []float64) float64 {
 		diff := x[i] - xref[i]
 		tot += diff * diff
 	}
-	dist := math.Sqrt(tot)
 
-	if dist >= n.Rho {
+	distsq := tot
+	rhosq := n.Rho * n.Rho
+	if distsq >= rhosq {
 		return 0
 	}
-	return (math.Exp(-n.Epsilon*math.Pow(dist/n.Rho, 2)) - math.Exp(-n.Epsilon)) / (1 - math.Exp(-n.Epsilon))
+	eps := -n.Epsilon
+	return (math.Exp(-eps*distsq/rhosq) - math.Exp(-eps)) / (1 - math.Exp(-eps))
 }
 
 type BasisFunc struct {

@@ -13,24 +13,24 @@ import (
 func main() {
 	// construct and solve grid using Finite point method:
 	const n = 10
-	const nnearest = 3
+	const nnearest = 5
 	const degree = 2
-	kern := GradientN{Order: 2}
-	//kern := LinKernel{Slope: .3, Intercept: 7}
 	const left = 3
 	const right = 7
+	const supportMult = 1.05
+	const epsilon = 15
+	kern := GradientN{Order: 2}
+	bounds := Boundaries{0: Dirichlet(left), (n - 1): Dirichlet(right)}
 
 	pts := make([]*Point, n)
 	for i := 0; i < n; i++ {
 		pts[i] = NewPoint(float64(i))
 	}
 
-	bounds := Boundaries{0: Dirichlet(left), (n - 1): Dirichlet(right)}
-
-	basisfn := BasisFunc{Dim: len(pts[0].X), Degree: degree}
+	basisfn := BasisFunc{Dim: 1, Degree: degree}
 
 	rhs := make([]float64, len(pts))
-	kp := &KernelParams{Basis: basisfn}
+	kp := &KernelParams{Basis: basisfn, Lambdas: make([]float64, basisfn.NumMonomials())}
 	for i, pref := range pts {
 		kp.X = pref.X
 		kp.LocalIndex = i
@@ -58,15 +58,18 @@ func main() {
 
 		// set weight function support distance to 1.5 times the distance to the farthest point in
 		// the reference point's neighborhood.
-		weightfn := NormGauss{Rho: 1.5 * dist, Epsilon: 1}
+		//weightfn := UniformWeight{}
+		weightfn := NormGauss{Rho: supportMult * dist, Epsilon: epsilon}
 
 		pref.SetNeighbors(weightfn, basisfn, nearest)
 		lambda := pref.LambdaMatrix()
+		fmt.Printf("xref=%v, lambda=\n% .2v\n", xref, mat64.Formatted(lambda))
 
 		for k, j := range indices {
 			// j is the global index of the k'th local node for the approximation of the
 			// neighborhood around global node/point i (i.e. xref).
 			kp.LocalIndex = k
+			kp.X = nearest[k].X
 			kp.Lambdas = make([]float64, basisfn.NumMonomials())
 			for m := range kp.Lambdas {
 				kp.Lambdas[m] = lambda.At(m, k)
@@ -96,7 +99,7 @@ func main() {
 	}
 
 	for i, p := range pts {
-		fmt.Printf("point %v (x=%v): phi=%v, coeffs=%v\n", i+1, p.X, p.Phi, p.coeffs)
+		fmt.Printf("point %v (x=%v): phi=%v, coeffs=%.3v\n", i+1, p.X, p.Phi, p.coeffs)
 		for j := 0; j < 10; j++ {
 			x := []float64{float64(i) + float64(j)/10}
 			val := p.Interpolate(x)
