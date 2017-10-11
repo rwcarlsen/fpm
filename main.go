@@ -101,7 +101,9 @@ func main() {
 
 	for i, val := range soln.RawVector().Data {
 		pts[i].Phi = val
-		pts[i].SolveCoeffs()
+	}
+	for _, p := range pts {
+		p.SolveCoeffs()
 	}
 
 	for i, p := range pts {
