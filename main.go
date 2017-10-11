@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -10,21 +11,35 @@ import (
 	"sort"
 )
 
+var dbg = flag.Bool("dbg", false, "true to print debug information")
+
+var debug = func(string, ...interface{}) (int, error) { return 0, nil }
+
 func main() {
+	flag.Parse()
+	if *dbg {
+		debug = fmt.Printf
+	}
+
 	// construct and solve grid using Finite point method:
 	const n = 11
-	const min, max = 0, 4
 	const nnearest = 3
 	const degree = 2
 	const supportMult = 1.05
 	const epsilon = 15
 
-	const thermalConduc = 2
-	const heatsource = 50
-	left := Dirichlet(0)
-	right := Neumann(5 / -thermalConduc)
-	kern := KernelMult{Mult: -thermalConduc, Kernel: Poisson(heatsource)}
+	//const min, max = 0, 4
+	//const thermalConduc = 2
+	//const heatsource = 50
+	//left := Dirichlet(0)
+	//right := Neumann(5 / -thermalConduc)
+	//kern := KernelMult{Mult: -thermalConduc, Kernel: Poisson(heatsource)}
+	//bounds := Boundaries{0: left, (n - 1): right}
 
+	const min, max = 0, 4
+	left := Dirichlet(0)
+	right := Neumann(0)
+	kern := Poisson(1)
 	bounds := Boundaries{0: left, (n - 1): right}
 
 	pts := make([]*Point, n)
@@ -69,7 +84,7 @@ func main() {
 
 		pref.SetNeighbors(weightfn, basisfn, nearest)
 		lambda := pref.LambdaMatrix()
-		fmt.Printf("xref=%v, lambda=\n% .2v\n", xref, mat64.Formatted(lambda))
+		debug("xref=%v, lambda=\n% .2v\n", xref, mat64.Formatted(lambda))
 
 		for k, j := range indices {
 			// j is the global index of the k'th local node for the approximation of the
@@ -87,8 +102,8 @@ func main() {
 			}
 		}
 	}
-	fmt.Printf("A=\n% .3v\n", mat64.Formatted(A))
-	fmt.Printf("rhs=%.3v\n", rhs)
+	debug("A=\n% .3v\n", mat64.Formatted(A))
+	debug("rhs=%.3v\n", rhs)
 
 	// need to add boundary conditions
 
@@ -97,7 +112,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("x=%.4v\n", soln.RawVector().Data)
+	debug("x=%.4v\n", soln.RawVector().Data)
 
 	for i, val := range soln.RawVector().Data {
 		pts[i].Phi = val
@@ -106,12 +121,11 @@ func main() {
 		p.SolveCoeffs()
 	}
 
-	for i, p := range pts {
-		fmt.Printf("point %v (x=%v): phi=%v, coeffs=%.3v\n", i+1, p.X, p.Phi, p.coeffs)
-		for j := 0; j < 11; j++ {
-			x := []float64{p.X[0] + (max-min)/11.0*float64(j)/float64(10)}
+	for _, p := range pts {
+		for j := 0; j < 10; j++ {
+			x := []float64{p.X[0] + (max-min)/10.0*float64(j)/float64(10)}
 			val := p.Interpolate(x)
-			fmt.Printf("    phi(%v)=%v\n", x[0], val)
+			fmt.Printf("%.5v\t%.5v\n", x[0], val)
 		}
 	}
 }
