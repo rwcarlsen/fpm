@@ -12,19 +12,25 @@ import (
 
 func main() {
 	// construct and solve grid using Finite point method:
-	const n = 10
-	const nnearest = 5
+	const n = 11
+	const min, max = 0, 4
+	const nnearest = 3
 	const degree = 2
-	const left = 3
-	const right = 7
 	const supportMult = 1.05
 	const epsilon = 15
-	kern := GradientN{Order: 2}
-	bounds := Boundaries{0: Dirichlet(left), (n - 1): Dirichlet(right)}
+
+	const thermalConduc = 2
+	const heatsource = 50
+	left := Dirichlet(0)
+	right := Neumann(5 / -thermalConduc)
+	kern := KernelMult{Mult: -thermalConduc, Kernel: Poisson(heatsource)}
+
+	bounds := Boundaries{0: left, (n - 1): right}
 
 	pts := make([]*Point, n)
 	for i := 0; i < n; i++ {
-		pts[i] = NewPoint(float64(i))
+		pts[i] = NewPoint(min + (max-min)*float64(i)/float64(n-1))
+		fmt.Println(pts[i].X)
 	}
 
 	basisfn := BasisFunc{Dim: 1, Degree: degree}
@@ -82,7 +88,7 @@ func main() {
 		}
 	}
 	fmt.Printf("A=\n% .3v\n", mat64.Formatted(A))
-	fmt.Println("rhs=", rhs)
+	fmt.Printf("rhs=%.3v\n", rhs)
 
 	// need to add boundary conditions
 
@@ -91,7 +97,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("x=", soln.RawVector().Data)
+	fmt.Printf("x=%.4v\n", soln.RawVector().Data)
 
 	for i, val := range soln.RawVector().Data {
 		pts[i].Phi = val
@@ -100,8 +106,8 @@ func main() {
 
 	for i, p := range pts {
 		fmt.Printf("point %v (x=%v): phi=%v, coeffs=%.3v\n", i+1, p.X, p.Phi, p.coeffs)
-		for j := 0; j < 10; j++ {
-			x := []float64{float64(i) + float64(j)/10}
+		for j := 0; j < 11; j++ {
+			x := []float64{p.X[0] + (max-min)/11.0*float64(j)/float64(10)}
 			val := p.Interpolate(x)
 			fmt.Printf("    phi(%v)=%v\n", x[0], val)
 		}

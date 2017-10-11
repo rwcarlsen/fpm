@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/gonum/matrix/mat64"
@@ -43,7 +42,7 @@ func (p *Point) Interpolate(x []float64) float64 {
 	tot := 0.0
 	for i, coeff := range p.coeffs {
 		v := p.bf.MonomialVal(i, xrel) * coeff
-		fmt.Printf("monomial %.3v*x^%v at x=%v is %.3v\n", coeff, p.bf.perms[i][0], xrel[0], v)
+		//fmt.Printf("monomial %.3v*x^%v at x=%v is %.3v\n", coeff, p.bf.perms[i][0], xrel[0], v)
 		tot += v
 	}
 	return tot

@@ -19,6 +19,11 @@ type Kernel interface {
 	RHS(kp *KernelParams) float64
 }
 
+type Poisson float64
+
+func (p Poisson) LHS(kp *KernelParams) float64 { return GradientN{Order: 2}.LHS(kp) }
+func (p Poisson) RHS(kp *KernelParams) float64 { return float64(p) }
+
 type GradientN struct {
 	Order int
 	Rhs   float64
@@ -45,6 +50,11 @@ func (k Dirichlet) LHS(kp *KernelParams) float64 {
 	return 0
 }
 func (k Dirichlet) RHS(kp *KernelParams) float64 { return float64(k) }
+
+type Neumann float64
+
+func (k Neumann) LHS(kp *KernelParams) float64 { return GradientN{Order: 1}.LHS(kp) }
+func (k Neumann) RHS(kp *KernelParams) float64 { return float64(k) }
 
 type KernelMult struct {
 	Kernel
