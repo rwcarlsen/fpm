@@ -9,6 +9,10 @@ type WeightFunc interface {
 	Weight(xref, x []float64) float64
 }
 
+type UniformWeight struct{}
+
+func (n UniformWeight) Weight(xref, x []float64) float64 { return 1 }
+
 // NormGauss implements a compatly supported radial basis function using the normalized Gaussian
 // function.  The value of the type is the support range/distance for the neighborhood for which
 // weights are being calculated.
@@ -51,7 +55,6 @@ func (b *BasisFunc) init() {
 			dims[i] = b.Degree + 1
 		}
 		b.perms = Permute(b.Degree, dims...)
-		fmt.Println("basisfunc-monomials=", b.perms)
 	}
 }
 

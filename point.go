@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"math"
 
@@ -33,7 +32,6 @@ func (p *Point) SolveCoeffs() {
 	p.coeffs = make([]float64, p.bf.NumMonomials())
 	soln := mat64.NewVector(len(p.coeffs), p.coeffs)
 	soln.MulVec(p.LambdaMatrix(), v)
-	fmt.Println("coeffs of ", p.X, ":", p.coeffs)
 }
 
 func (p *Point) Interpolate(x []float64) float64 {
@@ -49,7 +47,13 @@ func (p *Point) Interpolate(x []float64) float64 {
 	return tot
 }
 
+// LambdaMatrix represents the "(X^T*X)^-1 * X^T" matrix in the linear least squares approximation
+// that fits the points in this point's neighborhood.
 func (p *Point) LambdaMatrix() *mat64.Dense {
+	if p.neighbors == nil {
+		panic("cannot calculate lambda matrix before neighbors are set")
+	}
+
 	r, c := len(p.neighbors), p.bf.NumMonomials()
 	A := mat64.NewDense(r, c, nil)
 
@@ -59,24 +63,19 @@ func (p *Point) LambdaMatrix() *mat64.Dense {
 			xrel[i] = neighbor.X[i] - p.X[i]
 		}
 
-		fmt.Printf("    xrel=%v, weight=%v\n", xrel, p.weights[k])
 		for i := 0; i < c; i++ {
 			A.Set(k, i, p.weights[k]*p.bf.MonomialVal(i, xrel))
-			fmt.Printf("        LambdaMat[%v,%v]=%v, monomial=%v\n", k, i, A.At(k, i), p.bf.MonomialVal(i, xrel))
 		}
 	}
 
 	var tmp mat64.Dense
 	tmp.Mul(A.T(), A)
-	fmt.Printf("    A=\n% .3v\n", mat64.Formatted(A))
-	fmt.Printf("    A^T*A=\n% .3v\n", mat64.Formatted(&tmp))
 
 	var lambda mat64.Dense
 	err := lambda.Solve(&tmp, A.T())
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("    lambda=\n% .3v\n", mat64.Formatted(&lambda))
 	return &lambda
 }
 
