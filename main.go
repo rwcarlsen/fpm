@@ -4,11 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
-
-	"github.com/gonum/matrix/mat64"
-
-	"sort"
 )
 
 var dbg = flag.Bool("dbg", false, "true to print debug information")
@@ -45,80 +40,15 @@ func main() {
 	pts := make([]*Point, n)
 	for i := 0; i < n; i++ {
 		pts[i] = NewPoint(min + (max-min)*float64(i)/float64(n-1))
-		fmt.Println(pts[i].X)
 	}
+	points := NewPointSet(pts)
 
 	basisfn := BasisFunc{Dim: 1, Degree: degree}
 
-	rhs := make([]float64, len(pts))
-	kp := &KernelParams{Basis: basisfn, Lambdas: make([]float64, basisfn.NumMonomials())}
-	for i, pref := range pts {
-		kp.X = pref.X
-		kp.LocalIndex = i
-		if bkern, ok := bounds[i]; ok {
-			rhs[i] = bkern.RHS(kp)
-		} else {
-			rhs[i] = kern.RHS(kp)
-		}
-	}
-
-	A := mat64.NewDense(len(pts), len(pts), nil)
-	for i, pref := range pts {
-		xref := pref.X
-		kp.X = xref
-
-		indices, nearest := Nearest(nnearest, xref, pts)
-
-		farthest := nearest[len(nearest)-1]
-		dist := 0.0
-		for j := range farthest.X {
-			diff := farthest.X[j] - xref[j]
-			dist += diff * diff
-		}
-		dist = math.Sqrt(dist)
-
-		// set weight function support distance to 1.5 times the distance to the farthest point in
-		// the reference point's neighborhood.
-		//weightfn := UniformWeight{}
-		weightfn := NormGauss{Rho: supportMult * dist, Epsilon: epsilon}
-
-		pref.SetNeighbors(weightfn, basisfn, nearest)
-		lambda := pref.LambdaMatrix()
-		debug("xref=%v, lambda=\n% .2v\n", xref, mat64.Formatted(lambda))
-
-		for k, j := range indices {
-			// j is the global index of the k'th local node for the approximation of the
-			// neighborhood around global node/point i (i.e. xref).
-			kp.LocalIndex = k
-			kp.X = nearest[k].X
-			kp.Lambdas = make([]float64, basisfn.NumMonomials())
-			for m := range kp.Lambdas {
-				kp.Lambdas[m] = lambda.At(m, k)
-			}
-			if bkern, ok := bounds[i]; ok {
-				A.Set(i, j, bkern.LHS(kp)*math.Sqrt(weightfn.Weight(xref, nearest[k].X)))
-			} else {
-				A.Set(i, j, kern.LHS(kp)*math.Sqrt(weightfn.Weight(xref, nearest[k].X)))
-			}
-		}
-	}
-	debug("A=\n% .3v\n", mat64.Formatted(A))
-	debug("rhs=%.3v\n", rhs)
-
-	// need to add boundary conditions
-
-	var soln mat64.Vector
-	err := soln.SolveVec(A, mat64.NewVector(len(rhs), rhs))
+	BuildNeighborhoods(points, nnearest, basisfn, supportMult, epsilon)
+	err := Solve(points, kern, bounds)
 	if err != nil {
 		log.Fatal(err)
-	}
-	debug("x=%.4v\n", soln.RawVector().Data)
-
-	for i, val := range soln.RawVector().Data {
-		pts[i].Phi = val
-	}
-	for _, p := range pts {
-		p.SolveCoeffs()
 	}
 
 	for _, p := range pts {
@@ -128,31 +58,4 @@ func main() {
 			fmt.Printf("%.5v\t%.5v\n", x[0], val)
 		}
 	}
-}
-
-func Nearest(n int, x []float64, pts []*Point) (indices []int, nearest []*Point) {
-	sorted := make([]int, len(pts))
-	for i := range sorted {
-		sorted[i] = i
-	}
-	sort.Slice(sorted, func(i, j int) bool {
-		return L2DistSquared(pts[sorted[i]].X, x) < L2DistSquared(pts[sorted[j]].X, x)
-	})
-
-	nearest = make([]*Point, n)
-	indices = make([]int, n)
-	for i := range nearest {
-		indices[i] = sorted[i]
-		nearest[i] = pts[sorted[i]]
-	}
-	return indices, nearest
-}
-
-func L2DistSquared(a, b []float64) float64 {
-	tot := 0.0
-	for i := range a {
-		diff := a[i] - b[i]
-		tot += diff * diff
-	}
-	return tot
 }
