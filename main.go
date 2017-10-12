@@ -1,12 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"os/exec"
+	"strings"
 )
 
 var dbg = flag.Bool("dbg", false, "true to print debug information")
+var plot = flag.String("plot", "", "generate and write a plot with gnuplot to a file")
+var nsoln = flag.Int("nsol", 10, "number of uniformly distributed points to sample+print solution over")
+var prob = flag.String("prob", "", "name of test problem to run")
 
 var debug = func(string, ...interface{}) (int, error) { return 0, nil }
 
@@ -16,46 +23,51 @@ func main() {
 		debug = fmt.Printf
 	}
 
-	// construct and solve grid using Finite point method:
-	const n = 11
-	const nnearest = 3
-	const degree = 2
-	const supportMult = 1.05
-	const epsilon = 15
-
-	//const min, max = 0, 4
-	//const thermalConduc = 2
-	//const heatsource = 50
-	//left := Dirichlet(0)
-	//right := Neumann(5 / -thermalConduc)
-	//kern := KernelMult{Mult: -thermalConduc, Kernel: Poisson(heatsource)}
-	//bounds := Boundaries{0: left, (n - 1): right}
-
-	const min, max = 0, 4
-	left := Dirichlet(0)
-	right := Neumann(0)
-	kern := Poisson(1)
-	bounds := Boundaries{0: left, (n - 1): right}
-
-	pts := make([]*Point, n)
-	for i := 0; i < n; i++ {
-		pts[i] = NewPoint(min + (max-min)*float64(i)/float64(n-1))
+	if *prob != "" {
+		RunSample(*prob)
 	}
-	points := NewPointSet(pts)
+}
 
-	basisfn := BasisFunc{Dim: 1, Degree: degree}
-
-	BuildNeighborhoods(points, nnearest, basisfn, supportMult, epsilon)
-	err := Solve(points, kern, bounds)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, p := range pts {
-		for j := 0; j < 10; j++ {
-			x := []float64{p.X[0] + (max-min)/10.0*float64(j)/float64(10)}
-			val := p.Interpolate(x)
-			fmt.Printf("%.5v\t%.5v\n", x[0], val)
+func RunSample(name string) {
+	for _, prob := range SampleProblems1D {
+		if strings.ToLower(prob.Name) == strings.ToLower(name) {
+			pointset := prob.Run()
+			var buf bytes.Buffer
+			printSolution(&buf, pointset, prob)
+			if *plot == "" {
+				log.Print("Solution:")
+				fmt.Print(buf.String())
+			} else {
+				fmt.Fprintf(&buf, "e\n")
+				printSolution(&buf, pointset, prob)
+				cmd := exec.Command("gnuplot", "-e", `set terminal svg; set output "`+*plot+`"; plot "-" u 1:2 w lp title "FPM Approximation", "-" u 1:3 w lp title "Analytical Solution`)
+				cmd.Stdin = &buf
+				err := cmd.Run()
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			return
 		}
+	}
+	log.Fatalf("sample problem %v not found", name)
+}
+
+func printSolution(w io.Writer, set *PointSet, prob SampleProblem1D) {
+	n := 1
+	dims := make([]int, n)
+	for i := range dims {
+		dims[i] = *nsoln + 1
+	}
+
+	perms := Permute(0, dims...)
+	for _, p := range perms {
+		x := make([]float64, len(p))
+		for i, ii := range p {
+			x[i] = float64(ii)/float64(*nsoln)*(prob.Max-prob.Min) + prob.Min
+		}
+
+		u := set.Interpolate(x)
+		fmt.Fprintf(w, "%.3v\t%.3v\t%.3v\n", x[0], u, prob.Want(x[0]))
 	}
 }

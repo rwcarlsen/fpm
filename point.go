@@ -43,7 +43,8 @@ func (ps *PointSet) Points() []*Point { return ps.points }
 func (ps *PointSet) Len() int         { return len(ps.points) }
 
 func (ps *PointSet) Interpolate(x []float64) float64 {
-	panic("unimplemented")
+	_, nearest := Nearest(1, x, ps.points)
+	return nearest[0].Interpolate(x)
 }
 
 func NewPoint(x ...float64) *Point { return &Point{X: x, Index: -1} }
