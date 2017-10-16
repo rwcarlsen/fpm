@@ -60,11 +60,8 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 	rhs := make([]float64, set.Len())
 	for i, pref := range points {
 		kp.X = pref.X
-		kp.LocalIndex = i
+		kp.Index = i
 		kp.Basis = pref.Basis
-		if len(kp.Lambdas) != kp.Basis.NumMonomials() {
-			kp.Lambdas = make([]float64, kp.Basis.NumMonomials())
-		}
 
 		if bkern, ok := bounds[i]; ok {
 			rhs[i] = bkern.RHS(kp)
@@ -86,9 +83,12 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 			// j is the global index of the k'th local node for the approximation of the
 			// neighborhood around global node/point i (i.e. xref).
 			j := neighbor.Index
-			kp.LocalIndex = k
+			kp.Index = k
 			kp.X = neighbor.X
-			kp.Lambdas = make([]float64, pref.Basis.NumMonomials())
+
+			if len(kp.Lambdas) != kp.Basis.NumMonomials() {
+				kp.Lambdas = make([]float64, kp.Basis.NumMonomials())
+			}
 			for m := range kp.Lambdas {
 				kp.Lambdas[m] = lambda.At(m, k)
 			}

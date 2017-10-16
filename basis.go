@@ -63,7 +63,10 @@ func (b *BasisFunc) init() {
 // TermAtZero calculates and returns the multiplier (due to derivaties) on the monomial that
 // matches the set of derivative orders (nth derivative for each dimension/variable) and its
 // associated index.  This is equivalent to the partial derivative described by derivOrders of the
-// basis function evaluated at X=0 (all dimensions zero).
+// basis function evaluated at X=0 (all dimensions zero).  This panics if there is no non-zero basis
+// function term for the given derivative combination; this would be indicative of your basis
+// function degree (i.e. the number of interpolating monomials) being too low for the derivative
+// order of your differential equation being solved.
 func (b *BasisFunc) TermAtZero(derivOrders ...int) (index int, multiplier float64) {
 	b.init()
 	if len(derivOrders) != b.Dim {
@@ -83,7 +86,7 @@ outer:
 		}
 		return i, mult
 	}
-	return 0, 0
+	panic("highest monomial order is too low for kernel derivative order")
 }
 
 func (b *BasisFunc) NumMonomials() int {

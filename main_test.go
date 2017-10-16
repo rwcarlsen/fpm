@@ -16,8 +16,6 @@ func TestBasisFunc_TermAtZero(t *testing.T) {
 		{dims: 2, degree: 1, derivOrders: []int{0, 0}, want: 1},
 		{dims: 2, degree: 1, derivOrders: []int{1, 0}, want: 1},
 		{dims: 2, degree: 1, derivOrders: []int{0, 1}, want: 1},
-		{dims: 2, degree: 1, derivOrders: []int{1, 1}, want: 0},
-		{dims: 2, degree: 1, derivOrders: []int{1, 2}, want: 0},
 		{dims: 2, degree: 2, derivOrders: []int{0, 0}, want: 1},
 		{dims: 2, degree: 2, derivOrders: []int{1, 0}, want: 1},
 		{dims: 2, degree: 2, derivOrders: []int{0, 1}, want: 1},

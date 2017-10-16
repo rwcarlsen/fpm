@@ -46,6 +46,15 @@ var SampleProblems1D = []SampleProblem1D{
 		Want:   func(x float64) float64 { return x },
 		Tol:    1e-8,
 	}, {
+		Name: "Laplace_Discontin",
+		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
+		Min: 0, Max: 1,
+		Kernel: Poisson(0),
+		Left:   Dirichlet(0),
+		Right:  Dirichlet(1),
+		Want:   func(x float64) float64 { return x },
+		Tol:    1e-8,
+	}, {
 		Name: "Poisson",
 		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
 		Min: 0, Max: 1,
