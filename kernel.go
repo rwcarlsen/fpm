@@ -1,8 +1,12 @@
 package main
 
-type Kernel interface {
-	LHS(kp *KernelParams) float64
-	RHS(kp *KernelParams) float64
+type Kernel struct {
+	LHS KernelTerm
+	RHS KernelTerm
+}
+
+type KernelTerm interface {
+	Compute(kp *KernelParams) float64
 }
 
 type Boundaries map[int]Kernel
@@ -29,94 +33,138 @@ type KernelParams struct {
 	Lambdas []float64
 }
 
-// GradU represents the gradient operator acting on the dependent variable.
-func (kp *KernelParams) GradU() float64 {
-	tot := 0.0
-	for d := 0; d < kp.Basis.Dim; d++ {
-		derivs := make([]int, kp.Basis.Dim)
-		derivs[d] = 1
-		tot += kp.Term(derivs...)
-	}
-	return tot
-}
-
-// LaplaceU represents the laplace operator acting on the dependent variable.
-func (kp *KernelParams) LaplaceU() float64 {
-	tot := 0.0
-	for d := 0; d < kp.Basis.Dim; d++ {
-		derivs := make([]int, kp.Basis.Dim)
-		derivs[d] = 2
-		tot += kp.Term(derivs...)
-	}
-	return tot
-}
-
-// Term calculates the multiplier for an equation term representing a single partial derivative
+// TermMult calculates the multiplier for an equation term representing a single partial derivative
 // specified by derivOrders; each entry in derivOrders if the degree of (partial) derivative for
 // each dimension or independent variable.
-func (kp *KernelParams) Term(derivOrders ...int) float64 {
+func (kp *KernelParams) TermMult(derivOrders ...int) float64 {
 	i, mult := kp.Basis.TermAtZero(derivOrders...)
 	return mult * kp.Lambdas[i]
 }
 
-type SumKernel struct{ Kernels []Kernel }
+type KernelSum struct{ Terms []KernelTerm }
 
-func NewSumKernel(kernels ...Kernel) SumKernel { return SumKernel{Kernels: kernels} }
-func (k SumKernel) LHS(kp *KernelParams) float64 {
+func NewKernelSum(terms ...KernelTerm) KernelSum { return KernelSum{Terms: terms} }
+func (k KernelSum) Compute(kp *KernelParams) float64 {
 	tot := 0.0
-	for _, kern := range k.Kernels {
-		tot += kern.LHS(kp)
-	}
-	return tot
-}
-func (k SumKernel) RHS(kp *KernelParams) float64 {
-	tot := 0.0
-	for _, kern := range k.Kernels {
-		tot += kern.RHS(kp)
+	for _, term := range k.Terms {
+		tot += term.Compute(kp)
 	}
 	return tot
 }
 
-type Poisson float64
+type KernelMult []KernelTerm
 
-func (p Poisson) LHS(kp *KernelParams) float64 { return kp.LaplaceU() }
-func (p Poisson) RHS(kp *KernelParams) float64 { return float64(p) }
-
-type GradientN struct {
-	Order int
-	Rhs   float64
+func NewKernelMult(terms ...KernelTerm) KernelMult { return KernelMult(terms) }
+func (k KernelMult) Compute(kp *KernelParams) float64 {
+	tot := 1.0
+	for _, term := range k {
+		tot *= term.Compute(kp)
+	}
+	return tot
 }
 
-func (g GradientN) LHS(kp *KernelParams) float64 {
+type BoxLocation struct {
+	Lower [][]float64
+	Uper  [][]float64
+	Vals  []float64
+}
+
+func (b *BoxLocation) Add(lower, uper []float64, val float64) {
+	b.Lower = append(b.Lower, lower)
+	b.Uper = append(b.Uper, uper)
+	b.Vals = append(b.Vals, val)
+}
+
+func (b *BoxLocation) locIndex(loc []float64) []int {
+	var matches []int
+outer:
+	for i := range b.Lower {
+		low := b.Lower[i]
+		up := b.Uper[i]
+		for j, x := range loc {
+			if x < low[j] || up[j] < x {
+				continue outer
+			}
+		}
+		matches = append(matches, i)
+	}
+	return matches
+}
+
+func (b *BoxLocation) Compute(kp *KernelParams) float64 {
+	matches := b.locIndex(kp.StarX)
+	if len(matches) > 1 {
+		matches = b.locIndex(kp.X)
+	}
+
+	if len(matches) == 0 {
+		return 0
+	}
+
+	tot := 0.0
+	for _, index := range matches {
+		tot += b.Vals[index]
+	}
+	debug("k(starx=%v,x=%v)=%v\n", kp.StarX, kp.X, tot/float64(len(matches)))
+	return tot / float64(len(matches))
+}
+
+// GradU represents the gradient operator acting on the dependent variable for the current
+// location specified in kp.
+type GradU struct{}
+
+func (GradU) Compute(kp *KernelParams) float64 {
+	tot := 0.0
+	for d := 0; d < kp.Basis.Dim; d++ {
+		derivs := make([]int, kp.Basis.Dim)
+		derivs[d] = 1
+		tot += kp.TermMult(derivs...)
+	}
+	return tot
+}
+
+// LaplaceU represents the laplace operator acting on the dependent variable for the current
+// location specified in kp.
+type LaplaceU struct{}
+
+func (LaplaceU) Compute(kp *KernelParams) float64 {
+	tot := 0.0
+	for d := 0; d < kp.Basis.Dim; d++ {
+		derivs := make([]int, kp.Basis.Dim)
+		derivs[d] = 2
+		tot += kp.TermMult(derivs...)
+	}
+	return tot
+}
+
+type GradientN int
+
+func (g GradientN) Compute(kp *KernelParams) float64 {
 	// del squared phi - need to do each dimension
 	tot := 0.0
 	for d := 0; d < kp.Basis.Dim; d++ {
 		derivs := make([]int, kp.Basis.Dim)
-		derivs[d] = g.Order
-		tot += kp.Term(derivs...)
+		derivs[d] = int(g)
+		tot += kp.TermMult(derivs...)
 	}
 	return tot
 }
-func (g GradientN) RHS(kp *KernelParams) float64 { return g.Rhs }
 
-type Dirichlet float64
+type ConstKernel float64
 
-func (k Dirichlet) LHS(kp *KernelParams) float64 {
-	if kp.Index == 0 {
-		return 1
+func (k ConstKernel) Compute(kp *KernelParams) float64 { return float64(k) }
+
+// ZeroAtNeighbors represents a kernel term that takes on its float value only at the star-point
+// in a neighborhood and is zero at all other points in the neighborhood.  Useful for
+// dirichlet-like constraints/boundary-conditions.
+type ZeroAtNeighbors float64
+
+func (k ZeroAtNeighbors) Compute(kp *KernelParams) float64 {
+	if kp.Index == kp.StarIndex {
+		return float64(k)
 	}
 	return 0
 }
-func (k Dirichlet) RHS(kp *KernelParams) float64 { return float64(k) }
 
-type Neumann float64
-
-func (k Neumann) LHS(kp *KernelParams) float64 { return kp.GradU() }
-func (k Neumann) RHS(kp *KernelParams) float64 { return float64(k) }
-
-type KernelMult struct {
-	Kernel
-	Mult float64
-}
-
-func (g KernelMult) LHS(kp *KernelParams) float64 { return g.Mult * g.Kernel.LHS(kp) }
+func Dirichlet(rhs float64) Kernel { return Kernel{LHS: ZeroAtNeighbors(1), RHS: ConstKernel(rhs)} }
+func Neumann(rhs float64) Kernel   { return Kernel{LHS: GradU{}, RHS: ConstKernel(rhs)} }

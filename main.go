@@ -40,7 +40,7 @@ func RunSample(name string) {
 			} else {
 				fmt.Fprintf(&buf, "e\n")
 				printSolution(&buf, pointset, prob)
-				cmd := exec.Command("gnuplot", "-e", `set terminal svg; set output "`+*plot+`"; plot "-" u 1:2 w lp title "FPM Approximation", "-" u 1:3 w lp title "Analytical Solution`)
+				cmd := exec.Command("gnuplot", "-e", `set terminal svg; set output "`+*plot+`"; plot "-" u 1:2 w l title "FPM Approximation", "-" u 1:3 w l title "Analytical Solution`)
 				cmd.Stdin = &buf
 				err := cmd.Run()
 				if err != nil {

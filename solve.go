@@ -59,31 +59,38 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 
 	rhs := make([]float64, set.Len())
 	for i, pref := range points {
+		kp.StarIndex = i
+		kp.StarX = pref.X
 		kp.X = pref.X
 		kp.Index = i
 		kp.Basis = pref.Basis
 
+		kern := kernel
 		if bkern, ok := bounds[i]; ok {
-			rhs[i] = bkern.RHS(kp)
-		} else {
-			rhs[i] = kernel.RHS(kp)
+			kern = bkern
 		}
+		rhs[i] = kern.RHS.Compute(kp)
 	}
 
 	A := mat64.NewDense(set.Len(), set.Len(), nil)
 	for i, pref := range points {
-		xref := pref.X
-		kp.X = xref
 		kp.Basis = pref.Basis
+		kp.StarIndex = i
+		kp.StarX = pref.X
 
 		lambda := pref.LambdaMatrix()
-		debug("xref=%v, lambda=\n% .2v\n", xref, mat64.Formatted(lambda))
+		debug("xref=%v, lambda=\n% .2v\n", pref.X, mat64.Formatted(lambda))
+
+		kern := kernel
+		if bkern, ok := bounds[i]; ok {
+			kern = bkern
+		}
 
 		for k, neighbor := range pref.Neighbors {
 			// j is the global index of the k'th local node for the approximation of the
-			// neighborhood around global node/point i (i.e. xref).
+			// neighborhood around global node/point i (i.e. x-reference).
 			j := neighbor.Index
-			kp.Index = k
+			kp.Index = j
 			kp.X = neighbor.X
 
 			if len(kp.Lambdas) != kp.Basis.NumMonomials() {
@@ -92,11 +99,7 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 			for m := range kp.Lambdas {
 				kp.Lambdas[m] = lambda.At(m, k)
 			}
-			if bkern, ok := bounds[i]; ok {
-				A.Set(i, j, bkern.LHS(kp)*math.Sqrt(pref.W.Weight(xref, neighbor.X)))
-			} else {
-				A.Set(i, j, kernel.LHS(kp)*math.Sqrt(pref.W.Weight(xref, neighbor.X)))
-			}
+			A.Set(i, j, kern.LHS.Compute(kp)*math.Sqrt(pref.W.Weight(pref.X, neighbor.X)))
 		}
 	}
 	debug("A=\n% .3v\n", mat64.Formatted(A))
@@ -109,7 +112,7 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 	if err != nil {
 		return err
 	}
-	debug("x=%.4v\n", soln.RawVector().Data)
+	debug("phi=%.4v\n", soln.RawVector().Data)
 
 	for i, val := range soln.RawVector().Data {
 		points[i].Phi = val

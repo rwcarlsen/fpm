@@ -19,9 +19,11 @@ type SampleProblem1D struct {
 func (test SampleProblem1D) Run() *PointSet {
 	bounds := Boundaries{0: test.Left, (test.N - 1): test.Right}
 
+	debug("points\n")
 	pts := make([]*Point, test.N)
 	for i := 0; i < test.N; i++ {
 		pts[i] = NewPoint(test.Min + (test.Max-test.Min)*float64(i)/float64(test.N-1))
+		debug("    %.3v\n", pts[i].X)
 	}
 	points := NewPointSet(pts)
 
@@ -40,25 +42,42 @@ var SampleProblems1D = []SampleProblem1D{
 		Name: "Laplace",
 		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
 		Min: 0, Max: 1,
-		Kernel: Poisson(0),
+		Kernel: Kernel{LHS: LaplaceU{}, RHS: ConstKernel(0)},
 		Left:   Dirichlet(0),
 		Right:  Dirichlet(1),
 		Want:   func(x float64) float64 { return x },
 		Tol:    1e-8,
 	}, {
+		// the discontinuous derivative due to changing multiplers across the domain necessitates
+		// an interface node/point on the boundary where the discontinuity occurs.  Also, value
+		// selection for the multiplier must be carefully done in order to account for a neibor
+		// node being on the boundary between both (discontinuity) regions where we need to use
+		// the multiplier value for the star-node's side of the boundary.
 		Name: "Laplace_Discontin",
-		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
+		N:    11, Nnearest: 5, Degree: 2, Support: 1.05, Epsilon: 15,
 		Min: 0, Max: 1,
-		Kernel: Poisson(0),
-		Left:   Dirichlet(0),
-		Right:  Dirichlet(1),
-		Want:   func(x float64) float64 { return x },
-		Tol:    1e-8,
+		Kernel: Kernel{
+			LHS: NewKernelMult(LaplaceU{}, &BoxLocation{
+				Lower: [][]float64{{0}, {.5}},
+				Uper:  [][]float64{{.5}, {1}},
+				Vals:  []float64{1, 2}},
+			),
+			RHS: ConstKernel(0),
+		},
+		Left:  Dirichlet(0),
+		Right: Dirichlet(1),
+		Want: func(x float64) float64 {
+			if x < .5 {
+				return 4.0 / 3 * x
+			}
+			return 4.0/3*.5 + 2.0/3*(x-.5)
+		},
+		Tol: 1e-8,
 	}, {
 		Name: "Poisson",
 		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
 		Min: 0, Max: 1,
-		Kernel: Poisson(10),
+		Kernel: Kernel{LHS: LaplaceU{}, RHS: ConstKernel(10)},
 		Left:   Dirichlet(0),
 		Right:  Dirichlet(0),
 		Want:   func(x float64) float64 { return 5 * x * (x - 1) },
@@ -67,7 +86,7 @@ var SampleProblems1D = []SampleProblem1D{
 		Name: "Poisson_Neumann",
 		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
 		Min: 0, Max: 1,
-		Kernel: Poisson(10),
+		Kernel: Kernel{LHS: LaplaceU{}, RHS: ConstKernel(10)},
 		Left:   Dirichlet(0),
 		Right:  Neumann(1),
 		Want:   func(x float64) float64 { return 5*x*x - 9*x },
