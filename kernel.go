@@ -96,6 +96,10 @@ func (b *BoxLocation) Compute(kp *KernelParams) float64 {
 	if len(matches) > 1 {
 		matches = b.locIndex(kp.X)
 	}
+	//matches := b.locIndex(kp.X)
+	//if len(matches) > 1 {
+	//	matches = b.locIndex(kp.StarX)
+	//}
 
 	if len(matches) == 0 {
 		return 0

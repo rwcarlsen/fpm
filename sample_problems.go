@@ -22,11 +22,9 @@ func (test SampleProb1D) Run() *PointSet {
 
 	pts := test.Points
 	if len(pts) == 0 {
-		debug("points\n")
-		pts := make([]*Point, test.N)
+		pts = make([]*Point, test.N)
 		for i := 0; i < test.N; i++ {
 			pts[i] = NewPoint(basisfn, test.Min+(test.Max-test.Min)*float64(i)/float64(test.N-1))
-			debug("    %.3v\n", pts[i].X)
 		}
 	} else {
 		for _, p := range pts {

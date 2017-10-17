@@ -1,5 +1,12 @@
 package main
 
+// TODO:
+//    * figure out how to deal with discontinuities in the differential equation.  It seems like
+//      there needs to be a node *on* the interface/discontinuity.
+//    * figure out how to avoid singular global matrices due to bad neighbor groupings.  Danger
+//      zones include when two or more nodes/points have identical neighbor sets.
+//    *
+
 import (
 	"bytes"
 	"flag"
