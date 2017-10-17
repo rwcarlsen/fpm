@@ -2,7 +2,7 @@ package main
 
 import "log"
 
-type SampleProblem1D struct {
+type SampleProb1D struct {
 	Name        string
 	N           int
 	Nnearest    int
@@ -14,30 +14,38 @@ type SampleProblem1D struct {
 	Kernel      Kernel
 	Left, Right Kernel
 	Want        func(x float64) float64
+	Points      []*Point
 }
 
-func (test SampleProblem1D) Run() *PointSet {
-	bounds := Boundaries{0: test.Left, (test.N - 1): test.Right}
+func (test SampleProb1D) Run() *PointSet {
+	basisfn := &BasisFunc{Dim: 1, Degree: test.Degree}
 
-	debug("points\n")
-	pts := make([]*Point, test.N)
-	for i := 0; i < test.N; i++ {
-		pts[i] = NewPoint(test.Min + (test.Max-test.Min)*float64(i)/float64(test.N-1))
-		debug("    %.3v\n", pts[i].X)
+	pts := test.Points
+	if len(pts) == 0 {
+		debug("points\n")
+		pts := make([]*Point, test.N)
+		for i := 0; i < test.N; i++ {
+			pts[i] = NewPoint(basisfn, test.Min+(test.Max-test.Min)*float64(i)/float64(test.N-1))
+			debug("    %.3v\n", pts[i].X)
+		}
+	} else {
+		for _, p := range pts {
+			p.Basis = basisfn
+		}
 	}
-	points := NewPointSet(pts)
 
-	basisfn := BasisFunc{Dim: 1, Degree: test.Degree}
+	bounds := Boundaries{0: test.Left, (len(pts) - 1): test.Right}
 
-	BuildNeighborhoods(points, test.Nnearest, basisfn, test.Support, test.Epsilon)
-	err := Solve(points, test.Kernel, bounds)
+	set := NewPointSet(pts)
+	set.ComputeNeighbors(&NearestN{N: test.Nnearest, Epsilon: test.Epsilon, Support: test.Support})
+	err := Solve(set, test.Kernel, bounds)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return points
+	return set
 }
 
-var SampleProblems1D = []SampleProblem1D{
+var SampleProblems1D = []SampleProb1D{
 	{
 		Name: "Laplace",
 		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
@@ -54,7 +62,7 @@ var SampleProblems1D = []SampleProblem1D{
 		// node being on the boundary between both (discontinuity) regions where we need to use
 		// the multiplier value for the star-node's side of the boundary.
 		Name: "Laplace_Discontin",
-		N:    11, Nnearest: 5, Degree: 2, Support: 1.05, Epsilon: 15,
+		N:    11, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
 		Min: 0, Max: 1,
 		Kernel: Kernel{
 			LHS: NewKernelMult(LaplaceU{}, &BoxLocation{

@@ -6,19 +6,6 @@ import (
 	"github.com/gonum/matrix/mat64"
 )
 
-type Point struct {
-	// The index of this point in the global (ordered) point array.
-	Index int
-	X     []float64
-	// weights is the weight for each neighbor of X
-	Neighbors []*Point
-	Phi       float64
-	Basis     BasisFunc
-	W         WeightFunc
-	weights   []float64
-	coeffs    []float64
-}
-
 type PointSet struct {
 	points []*Point
 }
@@ -28,6 +15,12 @@ func NewPointSet(points []*Point) *PointSet {
 		points[i].Index = i
 	}
 	return &PointSet{points: points}
+}
+
+func (ps *PointSet) ComputeNeighbors(nh Neighborhooder) {
+	for _, p := range ps.points {
+		p.SetNeighbors(nh.Neighborhood(p, ps))
+	}
 }
 
 func (ps *PointSet) Append(points ...*Point) {
@@ -47,7 +40,44 @@ func (ps *PointSet) Interpolate(x []float64) float64 {
 	return nearest[0].Interpolate(x)
 }
 
-func NewPoint(x ...float64) *Point { return &Point{X: x, Index: -1} }
+type Neighborhooder interface {
+	Neighborhood(p *Point, set *PointSet) ([]*Point, WeightFunc)
+}
+
+type NearestN struct {
+	N       int
+	Epsilon float64
+	Support float64
+}
+
+func (g *NearestN) Neighborhood(p *Point, set *PointSet) ([]*Point, WeightFunc) {
+	_, nearest := Nearest(g.N, p.X, set.Points())
+
+	farthest := nearest[len(nearest)-1].X
+	dist := 0.0
+	for i := range p.X {
+		diff := p.X[i] - farthest[i]
+		dist += diff * diff
+	}
+	dist = math.Sqrt(dist)
+
+	return nearest, NormGauss{Epsilon: g.Epsilon, Rho: g.Support * dist}
+}
+
+type Point struct {
+	// The index of this point in the global (ordered) point array.
+	Index int
+	X     []float64
+	// weights is the weight for each neighbor of X
+	Neighbors []*Point
+	Phi       float64
+	Basis     *BasisFunc
+	W         WeightFunc
+	weights   []float64
+	coeffs    []float64
+}
+
+func NewPoint(bf *BasisFunc, x ...float64) *Point { return &Point{X: x, Index: -1, Basis: bf} }
 
 // SolveCoeffs computes the approximated solution's monomial coefficients using the Phi values of
 // all nodes in this point's neighborhood (i.e. Lambda*[w_k*phi_k]).  All Phi values for this node
@@ -113,9 +143,9 @@ func (p *Point) LambdaMatrix() *mat64.Dense {
 // SetNeighbors tells the point what other points are in its local neighborhood and initiates the
 // computation of the Lambda matrix used for interpolating and building the global system to solve
 // the differential equation(s).
-func (p *Point) SetNeighbors(wf WeightFunc, bf BasisFunc, neighbors []*Point) {
+func (p *Point) SetNeighbors(neighbors []*Point, wf WeightFunc) {
 	p.Neighbors = neighbors
-	p.Basis, p.W = bf, wf
+	p.W = wf
 
 	p.weights = make([]float64, len(neighbors))
 	for k, neighbor := range neighbors {

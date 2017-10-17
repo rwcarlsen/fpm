@@ -26,7 +26,7 @@ type KernelParams struct {
 	// Basis holds the basis function for the current local node.  This can be used to determine
 	// monomial coefficients, compute monomial values, etc.  This must be used - directly or
 	// indirectly (via the KernelParams.Term method) - to calculate derivative terms for kernels.
-	Basis BasisFunc
+	Basis *BasisFunc
 	// Lambdas holds the wieghted least squares regression coefficients for the monomial terms of
 	// the current star+local point/node combination.  The nth item in the slice is the nth monomial
 	// coefficient.

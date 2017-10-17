@@ -28,6 +28,35 @@ func main() {
 	}
 }
 
+//func InterfaceProblem() {
+//	const n = 11
+//	const min, max = 0, 1
+//	bounds := Boundaries{0: Dirichlet(0), (n - 1): Dirichlet(1)}
+//	basisfn := BasisFunc{Dim: 1, Degree: 2}
+//	kernel := Kernel{
+//		LHS: NewKernelMult(LaplaceU{}, &BoxLocation{
+//			Lower: [][]float64{{0}, {.5}},
+//			Uper:  [][]float64{{.5}, {1}},
+//			Vals:  []float64{1, 2}},
+//		),
+//		RHS: ConstKernel(0),
+//	}
+//
+//	debug("points\n")
+//	pts := make([]*Point, n)
+//	for i := 0; i < n; i++ {
+//		pts[i] = NewPoint(basisfn, min+(max-min)*float64(i)/float64(n-1))
+//		debug("    %.3v\n", pts[i].X)
+//	}
+//	points := NewPointSet(pts)
+//
+//	points.ComputeNeighbors(&NearestN{N: 4, Epsilon: 15, Support: 1.05})
+//	err := points.Solve(kernel, bounds)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//}
+
 func RunSample(name string) {
 	for _, prob := range SampleProblems1D {
 		if strings.ToLower(prob.Name) == strings.ToLower(name) {
@@ -53,7 +82,7 @@ func RunSample(name string) {
 	log.Fatalf("sample problem %v not found", name)
 }
 
-func printSolution(w io.Writer, set *PointSet, prob SampleProblem1D) {
+func printSolution(w io.Writer, set *PointSet, prob SampleProb1D) {
 	n := 1
 	dims := make([]int, n)
 	for i := range dims {
