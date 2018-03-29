@@ -56,7 +56,7 @@ var SampleProblems1D = []SampleProb1D{
 	}, {
 		// the discontinuous derivative due to changing multiplers across the domain necessitates
 		// an interface node/point on the boundary where the discontinuity occurs.  Also, value
-		// selection for the multiplier must be carefully done in order to account for a neibor
+		// selection for the multiplier must be carefully done in order to account for a neighbor
 		// node being on the boundary between both (discontinuity) regions where we need to use
 		// the multiplier value for the star-node's side of the boundary.
 		Name: "Laplace_Discontin",
@@ -79,6 +79,19 @@ var SampleProblems1D = []SampleProb1D{
 			return 4.0/3*.5 + 2.0/3*(x-.5)
 		},
 		Tol: 1e-8,
+		//Points: []*Point{
+		//	NewPoint(nil, 0),
+		//	NewPoint(nil, .1),
+		//	NewPoint(nil, .2),
+		//	NewPoint(nil, .3),
+		//	NewPoint(nil, .4),
+		//	NewPoint(nil, .5),
+		//	NewPoint(nil, .6),
+		//	NewPoint(nil, .7),
+		//	NewPoint(nil, .8),
+		//	NewPoint(nil, .9),
+		//	NewPoint(nil, 1),
+		//},
 	}, {
 		Name: "Poisson",
 		N:    10, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,

@@ -34,7 +34,7 @@ type KernelParams struct {
 }
 
 // TermMult calculates the multiplier for an equation term representing a single partial derivative
-// specified by derivOrders; each entry in derivOrders if the degree of (partial) derivative for
+// specified by derivOrders; each entry in derivOrders is the degree of (partial) derivative for
 // each dimension or independent variable.
 func (kp *KernelParams) TermMult(derivOrders ...int) float64 {
 	i, mult := kp.Basis.TermAtZero(derivOrders...)
@@ -92,25 +92,12 @@ outer:
 }
 
 func (b *BoxLocation) Compute(kp *KernelParams) float64 {
-	matches := b.locIndex(kp.StarX)
-	if len(matches) > 1 {
-		matches = b.locIndex(kp.X)
-	}
-	//matches := b.locIndex(kp.X)
-	//if len(matches) > 1 {
-	//	matches = b.locIndex(kp.StarX)
-	//}
-
+	matches := b.locIndex(kp.X)
 	if len(matches) == 0 {
 		return 0
 	}
 
-	tot := 0.0
-	for _, index := range matches {
-		tot += b.Vals[index]
-	}
-	debug("k(starx=%v,x=%v)=%v\n", kp.StarX, kp.X, tot/float64(len(matches)))
-	return tot / float64(len(matches))
+	return b.Vals[matches[0]]
 }
 
 // GradU represents the gradient operator acting on the dependent variable for the current

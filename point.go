@@ -52,15 +52,8 @@ type NearestN struct {
 
 func (g *NearestN) Neighborhood(p *Point, set *PointSet) ([]*Point, WeightFunc) {
 	_, nearest := Nearest(g.N, p.X, set.Points())
-
 	farthest := nearest[len(nearest)-1].X
-	dist := 0.0
-	for i := range p.X {
-		diff := p.X[i] - farthest[i]
-		dist += diff * diff
-	}
-	dist = math.Sqrt(dist)
-
+	dist := math.Sqrt(L2DistSquared(p.X, farthest))
 	return nearest, NormGauss{Epsilon: g.Epsilon, Rho: g.Support * dist}
 }
 

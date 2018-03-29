@@ -13,9 +13,8 @@ type UniformWeight struct{}
 
 func (n UniformWeight) Weight(xref, x []float64) float64 { return 1 }
 
-// NormGauss implements a compatly supported radial basis function using the normalized Gaussian
-// function.  The value of the type is the support range/distance for the neighborhood for which
-// weights are being calculated.
+// NormGauss implements a compactly supported radial basis function using the normalized Gaussian
+// function.
 type NormGauss struct {
 	// The value of the type is the support range/distance for the neighborhood for which
 	// weights are being calculated.
@@ -25,18 +24,12 @@ type NormGauss struct {
 }
 
 func (n NormGauss) Weight(xref, x []float64) float64 {
-	tot := 0.0
-	for i := range x {
-		diff := x[i] - xref[i]
-		tot += diff * diff
-	}
-
-	distsq := tot
+	distsq := L2DistSquared(xref, x)
 	rhosq := n.Rho * n.Rho
 	if distsq >= rhosq {
 		return 0
 	}
-	eps := -n.Epsilon
+	eps := n.Epsilon
 	return (math.Exp(-eps*distsq/rhosq) - math.Exp(-eps)) / (1 - math.Exp(-eps))
 }
 

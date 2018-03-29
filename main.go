@@ -30,6 +30,15 @@ func main() {
 		debug = fmt.Printf
 	}
 
+	//wfn := NormGauss{Rho: 1, Epsilon: 15}
+	//n := 10
+	//for i := 0; i <= n; i++ {
+	//	x := float64(i) / float64(n)
+	//	w := wfn.Weight([]float64{0}, []float64{x})
+	//	fmt.Printf("weight[x=%v]=%v\n", x, w)
+	//}
+	//return
+
 	if *prob != "" {
 		RunSample(*prob)
 	}
