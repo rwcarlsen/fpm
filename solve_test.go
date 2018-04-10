@@ -13,7 +13,7 @@ func TestSolve_1D(t *testing.T) {
 	}
 }
 
-func testSolve1D(got *PointSet, test SampleProblem1D) func(t *testing.T) {
+func testSolve1D(got *PointSet, test SampleProb1D) func(t *testing.T) {
 	return func(t *testing.T) {
 		nsamples := 11
 		for i := 0; i < nsamples; i++ {

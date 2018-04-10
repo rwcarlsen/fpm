@@ -72,15 +72,16 @@ func TestPermute(t *testing.T) {
 		want   [][]int
 	}{
 		{
+			// 2 dimensions, 1st order (linear)
 			dims:   []int{2, 2},
 			maxsum: 1,
 			want: [][]int{
 				{0, 0},
 				{0, 1},
 				{1, 0},
-				{1, 1},
 			},
 		}, {
+			// 2 dimensions, 2nd order (quadratic)
 			dims:   []int{3, 3},
 			maxsum: 2,
 			want: [][]int{
@@ -92,18 +93,20 @@ func TestPermute(t *testing.T) {
 				{2, 0},
 			},
 		}, {
-			dims:   []int{3, 3},
-			maxsum: 3,
+			// 3 dimensions, 2nd order (quadratic)
+			dims:   []int{3, 3, 3},
+			maxsum: 2,
 			want: [][]int{
-				{0, 0},
-				{0, 1},
-				{0, 2},
-				{1, 0},
-				{1, 1},
-				{1, 2},
-				{2, 0},
-				{2, 1},
-				{2, 2},
+				{0, 0, 0},
+				{0, 0, 1},
+				{0, 0, 2},
+				{0, 1, 0},
+				{0, 1, 1},
+				{0, 2, 0},
+				{1, 0, 0},
+				{1, 0, 1},
+				{1, 1, 0},
+				{2, 0, 0},
 			},
 		},
 	}
@@ -116,6 +119,10 @@ func TestPermute(t *testing.T) {
 
 func testPermute(got, want [][]int) func(t *testing.T) {
 	return func(t *testing.T) {
+		if len(got) != len(want) {
+			t.Errorf("mismatched number of permutations: want %v, got %v", want, got)
+			return
+		}
 		for i, gotperm := range got {
 			wantperm := want[i]
 			for j := range gotperm {

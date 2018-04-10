@@ -44,9 +44,12 @@ func sum(vals ...int) int {
 func permute(maxsum int, dimensions []int, prefix []int) [][]int {
 	set := make([][]int, 0)
 
-	if maxsum > 0 && sum(prefix...) >= maxsum {
-		set = [][]int{append(append([]int{}, prefix...), make([]int, len(dimensions))...)}
-		return set
+	if maxsum > 0 {
+		if tot := sum(prefix...); tot == maxsum {
+			return [][]int{append(append([]int{}, prefix...), make([]int, len(dimensions))...)}
+		} else if tot > maxsum {
+			return set
+		}
 	}
 
 	if len(dimensions) == 1 {
