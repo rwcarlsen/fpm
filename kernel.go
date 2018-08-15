@@ -52,6 +52,16 @@ func (k KernelSum) Compute(kp *KernelParams) float64 {
 	return tot
 }
 
+// TODO: In order to handle discontinuities between regions of the problem domain, we need to be
+// able to allow users to specify different regions of the problem  in a way that allows defining
+// (star) point neighborhoods to be limited to points that are within the star point's region.
+// Also we need to be able to specify special kernels that are used for star points that are
+// located on the boundary between regions.  These boundary star points should basically have no
+// points in their neighborhood and also need to be in the neighborhoods of star points on all
+// bordering regions.  This should resolve solution artifacts and conditioning issues related to
+// discontinuities and also fix issues caused mucking around with star-node support range in order
+// to try to fix discontinuity weirdness.
+
 type KernelMult []KernelTerm
 
 func NewKernelMult(terms ...KernelTerm) KernelMult { return KernelMult(terms) }
