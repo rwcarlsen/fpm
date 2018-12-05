@@ -6,7 +6,7 @@ import (
 	"github.com/gonum/matrix/mat64"
 )
 
-func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
+func Solve(set *PointSet, subs Subdomainer, kernels KernelList) error {
 	points := set.Points()
 	kp := &KernelParams{}
 
@@ -19,10 +19,7 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 		kp.Index = i
 		kp.Basis = pref.Basis
 
-		kern := kernel
-		if bkern, ok := bounds[i]; ok {
-			kern = bkern
-		}
+		kern := kernels[int(subs.Subdomain(kp.X)[0])]
 		rhs[i] = kern.RHS.Compute(kp)
 	}
 
@@ -36,10 +33,7 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 		lambda := pref.LambdaMatrix()
 		debug("xref=%v, lambda=\n% .2v\n", pref.X, mat64.Formatted(lambda))
 
-		kern := kernel
-		if bkern, ok := bounds[i]; ok {
-			kern = bkern
-		}
+		starsub := subs.Subdomain(kp.StarX)[0]
 
 		for k, neighbor := range pref.Neighbors {
 			// j is the global index of the k'th local node for the approximation of the
@@ -54,6 +48,18 @@ func Solve(set *PointSet, kernel Kernel, bounds Boundaries) error {
 			for m := range kp.Lambdas {
 				kp.Lambdas[m] = lambda.At(m, k)
 			}
+
+			subdomains := subs.Subdomain(kp.X)
+			subid := subdomains[0]
+			if len(subdomains) > 0 {
+				for _, sub := range subdomains {
+					if sub == starsub {
+						subid = sub
+						break
+					}
+				}
+			}
+			kern := kernels[int(subid)]
 			A.Set(i, j, kern.LHS.Compute(kp)*math.Sqrt(pref.W.Weight(pref.X, neighbor.X)))
 		}
 	}

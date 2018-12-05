@@ -32,11 +32,15 @@ func (test SampleProb1D) Run() *PointSet {
 		}
 	}
 
-	bounds := Boundaries{0: test.Left, (len(pts) - 1): test.Right}
+	kernels := KernelList{test.Left, test.Right, test.Kernel}
+	subs := &BoxSubdomains{}
+	subs.Add(pts[0].X, pts[0].X, 0)
+	subs.Add(pts[len(pts)-1].X, pts[len(pts)-1].X, 1)
+	subs.Add(pts[0].X, pts[len(pts)-1].X, 2)
 
 	set := NewPointSet(pts)
 	set.ComputeNeighbors(&NearestN{N: test.Nnearest, Epsilon: test.Epsilon, Support: test.Support})
-	err := Solve(set, test.Kernel, bounds)
+	err := Solve(set, subs, kernels)
 	if err != nil {
 		log.Fatal(err)
 	}

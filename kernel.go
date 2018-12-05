@@ -9,7 +9,7 @@ type KernelTerm interface {
 	Compute(kp *KernelParams) float64
 }
 
-type Boundaries map[int]Kernel
+type KernelList []Kernel
 
 type KernelParams struct {
 	// StarIndex holds the global ID/index of the current star/primary point/node for which
@@ -136,6 +136,54 @@ func (LaplaceU) Compute(kp *KernelParams) float64 {
 		tot += kp.TermMult(derivs...)
 	}
 	return tot
+}
+
+type SubdomainId int
+
+type Subdomainer interface {
+	Subdomain(x []float64) []SubdomainId
+}
+
+type BoxSubdomains struct {
+	Lower [][]float64
+	Uper  [][]float64
+	Ids   []SubdomainId
+}
+
+func (b *BoxSubdomains) Add(lower, uper []float64, id SubdomainId) {
+	b.Lower = append(b.Lower, lower)
+	b.Uper = append(b.Uper, uper)
+	b.Ids = append(b.Ids, id)
+}
+
+func (b *BoxSubdomains) Subdomain(xs []float64) []SubdomainId {
+	var matches []SubdomainId
+outer:
+	for i := range b.Lower {
+		low := b.Lower[i]
+		up := b.Uper[i]
+		for j, x := range xs {
+			if x < low[j] || up[j] < x {
+				continue outer
+			}
+		}
+		matches = append(matches, b.Ids[i])
+	}
+	return matches
+}
+
+type ZeroOutsideSubdomain struct {
+	Subdomain SubdomainId
+	Subdomainer
+}
+
+func (z *ZeroOutsideSubdomain) Compute(kp *KernelParams) float64 {
+	a := z.Subdomainer.Subdomain(kp.X)
+	b := z.Subdomainer.Subdomain(kp.StarX)
+	if len(a) != len(b) || (len(a) > 0 && a[0] != b[0]) {
+		return 0
+	}
+	return 1
 }
 
 type GradientN int
