@@ -59,15 +59,15 @@ func (g *NearestN) Neighborhood(p *Point, set *PointSet) ([]*Point, WeightFunc) 
 
 type Point struct {
 	// The index of this point in the global (ordered) point array.
-	Index int
-	X     []float64
-	// weights is the weight for each neighbor of X
+	Index     int
+	X         []float64
 	Neighbors []*Point
 	Phi       float64
 	Basis     *BasisFunc
 	W         WeightFunc
-	weights   []float64
-	coeffs    []float64
+	// weights is the weight for each neighbor of X - len(weights) == len(Neighbors)
+	weights []float64
+	coeffs  []float64
 }
 
 func NewPoint(bf *BasisFunc, x ...float64) *Point { return &Point{X: x, Index: -1, Basis: bf} }

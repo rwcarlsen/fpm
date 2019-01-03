@@ -61,6 +61,17 @@ func (k KernelSum) Compute(kp *KernelParams) float64 {
 // bordering regions.  This should resolve solution artifacts and conditioning issues related to
 // discontinuities and also fix issues caused mucking around with star-node support range in order
 // to try to fix discontinuity weirdness.
+//
+// I think this should solve the problem if the star node is on an interface between
+// subdomains - to compute the linear system matrix entries for it and its neighbors:
+//     - If the star node is on an interface between subdomains:
+//         - for neighbors, use the value of kernels in the region of the neighbor's coordinates.
+//         - for the star node, use the average value of the kernel contribution from all bordering subdomains
+//     - If the star node is not on an interface:
+//         - for the star node, use the normal/only kernel value
+//         - for neighbor nodes:
+//             - on an interface use the kernel value for the star node's subdomain
+//             - otherwise just use the node's normal/only kernel value
 
 type KernelMult []KernelTerm
 
