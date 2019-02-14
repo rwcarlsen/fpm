@@ -112,13 +112,26 @@ outer:
 	return matches
 }
 
+type FuncKernel func(kp *KernelParams) float64
+
+func (f FuncKernel) Compute(kp *KernelParams) float64 { return f(kp) }
+
 func (b *BoxLocation) Compute(kp *KernelParams) float64 {
 	matches := b.locIndex(kp.X)
 	if len(matches) == 0 {
 		return 0
+	} else if len(matches) > 1 {
+		// if the neighbor point is on a boundary between two values, prefer the value at the star point
+		matches = b.locIndex(kp.StarX)
 	}
 
-	return b.Vals[matches[0]]
+	// if there are still multiple matches (i.e. even at the star point), use the average
+	sum := 0.0
+	for _, m := range matches {
+		sum += b.Vals[m]
+	}
+
+	return sum / float64(len(matches))
 }
 
 // GradU represents the gradient operator acting on the dependent variable for the current

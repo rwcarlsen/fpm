@@ -36,8 +36,13 @@ func (ps *PointSet) Points() []*Point { return ps.points }
 func (ps *PointSet) Len() int         { return len(ps.points) }
 
 func (ps *PointSet) Interpolate(x []float64) float64 {
-	_, nearest := Nearest(1, x, ps.points)
-	return nearest[0].Interpolate(x)
+	n := 1
+	_, nearest := Nearest(n, x, ps.points)
+	sum := 0.0
+	for _, p := range nearest {
+		sum += p.Interpolate(x)
+	}
+	return sum / float64(n)
 }
 
 type Neighborhooder interface {
