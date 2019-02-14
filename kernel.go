@@ -148,6 +148,20 @@ func (GradU) Compute(kp *KernelParams) float64 {
 	return tot
 }
 
+// LaplaceSpaceTime represents the laplace operator acting on the dependent variable for the current
+// location specified in kp.
+type LaplaceUSpace struct{}
+
+func (LaplaceUSpace) Compute(kp *KernelParams) float64 {
+	tot := 0.0
+	for d := 1; d < kp.Basis.Dim; d++ {
+		derivs := make([]int, kp.Basis.Dim)
+		derivs[d] = 2
+		tot += kp.TermMult(derivs...)
+	}
+	return tot
+}
+
 // LaplaceU represents the laplace operator acting on the dependent variable for the current
 // location specified in kp.
 type LaplaceU struct{}
@@ -165,7 +179,6 @@ func (LaplaceU) Compute(kp *KernelParams) float64 {
 type GradientN int
 
 func (g GradientN) Compute(kp *KernelParams) float64 {
-	// del squared phi - need to do each dimension
 	tot := 0.0
 	for d := 0; d < kp.Basis.Dim; d++ {
 		derivs := make([]int, kp.Basis.Dim)
@@ -173,6 +186,26 @@ func (g GradientN) Compute(kp *KernelParams) float64 {
 		tot += kp.TermMult(derivs...)
 	}
 	return tot
+}
+
+type GradientNSpace int
+
+func (g GradientNSpace) Compute(kp *KernelParams) float64 {
+	tot := 0.0
+	for d := 1; d < kp.Basis.Dim; d++ {
+		derivs := make([]int, kp.Basis.Dim)
+		derivs[d] = int(g)
+		tot += kp.TermMult(derivs...)
+	}
+	return tot
+}
+
+type GradientNTime int
+
+func (g GradientNTime) Compute(kp *KernelParams) float64 {
+	derivs := make([]int, kp.Basis.Dim)
+	derivs[0] = int(g)
+	return kp.TermMult(derivs...)
 }
 
 type ConstKernel float64

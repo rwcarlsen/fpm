@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -30,48 +32,62 @@ func main() {
 		debug = fmt.Printf
 	}
 
-	//wfn := NormGauss{Rho: 1, Epsilon: 15}
-	//n := 10
-	//for i := 0; i <= n; i++ {
-	//	x := float64(i) / float64(n)
-	//	w := wfn.Weight([]float64{0}, []float64{x})
-	//	fmt.Printf("weight[x=%v]=%v\n", x, w)
-	//}
-	//return
-
 	if *prob != "" {
 		RunSample(*prob)
+	} else {
+		InterfaceProblem()
 	}
 }
 
-//func InterfaceProblem() {
-//	const n = 11
-//	const min, max = 0, 1
-//	bounds := Boundaries{0: Dirichlet(0), (n - 1): Dirichlet(1)}
-//	basisfn := BasisFunc{Dim: 1, Degree: 2}
-//	kernel := Kernel{
-//		LHS: NewKernelMult(LaplaceU{}, &BoxLocation{
-//			Lower: [][]float64{{0}, {.5}},
-//			Uper:  [][]float64{{.5}, {1}},
-//			Vals:  []float64{1, 2}},
-//		),
-//		RHS: ConstKernel(0),
-//	}
-//
-//	debug("points\n")
-//	pts := make([]*Point, n)
-//	for i := 0; i < n; i++ {
-//		pts[i] = NewPoint(basisfn, min+(max-min)*float64(i)/float64(n-1))
-//		debug("    %.3v\n", pts[i].X)
-//	}
-//	points := NewPointSet(pts)
-//
-//	points.ComputeNeighbors(&NearestN{N: 4, Epsilon: 15, Support: 1.05})
-//	err := points.Solve(kernel, bounds)
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//}
+func InterfaceProblem() {
+	basisfn := &BasisFunc{Dim: 2, Degree: 2}
+	kernel := Kernel{
+		LHS: NewKernelSum(LaplaceUSpace{}, NewKernelMult(ConstKernel(-1), GradientNTime(1))),
+		RHS: ConstKernel(0),
+	}
+
+	nt := 10
+	nx := 10
+	xmin := 0.0
+	xmax := 1.0
+	tmin := 0.0
+	tmax := 1.0
+
+	mins := []float64{tmin, xmin}
+	maxes := []float64{tmax, xmax}
+	dims := []int{nt, nx}
+	perms := Permute(0, dims...)
+
+	debug("points:\n")
+	pts := make([]*Point, len(perms))
+	for i, p := range perms {
+		x := make([]float64, len(p))
+		for i, ii := range p {
+			x[i] = float64(ii)/float64(dims[i]-1)*(maxes[i]-mins[i]) + mins[i]
+		}
+		pts[i] = NewPoint(basisfn, x...)
+		debug("    %.3v\n", pts[i].X)
+	}
+	points := NewPointSet(pts)
+
+	bounds := Boundaries{}
+	for i, p := range pts {
+		if p.X[0] == tmin {
+			bounds[i] = Dirichlet(math.Sin(math.Pi*p.X[0]) + p.X[1])
+		} else if p.X[1] == xmin {
+			bounds[i] = Dirichlet(xmin)
+		} else if p.X[1] == xmax {
+			bounds[i] = Dirichlet(xmax)
+		}
+	}
+
+	points.ComputeNeighbors(&NearestN{N: 4, Epsilon: 15, Support: 1.05})
+	err := Solve(points, kernel, bounds)
+	if err != nil {
+		log.Fatal(err)
+	}
+	printSolutionND(os.Stdout, points, mins, maxes)
+}
 
 func RunSample(name string) {
 	for _, prob := range SampleProblems1D {
@@ -114,5 +130,27 @@ func printSolution(w io.Writer, set *PointSet, prob SampleProb1D) {
 
 		u := set.Interpolate(x)
 		fmt.Fprintf(w, "%.3v\t%.3v\t%.3v\n", x[0], u, prob.Want(x[0]))
+	}
+}
+
+func printSolutionND(w io.Writer, set *PointSet, mins, maxes []float64) {
+	n := len(mins)
+	dims := make([]int, n)
+	for i := range dims {
+		dims[i] = *nsoln + 1
+	}
+
+	perms := Permute(0, dims...)
+	for _, p := range perms {
+		x := make([]float64, len(p))
+		for i, ii := range p {
+			x[i] = float64(ii)/float64(*nsoln)*(maxes[i]-mins[i]) + mins[i]
+		}
+
+		u := set.Interpolate(x)
+		for _, xx := range x {
+			fmt.Fprintf(w, "%.3v\t", xx)
+		}
+		fmt.Fprintf(w, "%.3v\n", u)
 	}
 }

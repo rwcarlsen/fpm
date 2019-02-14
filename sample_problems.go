@@ -61,7 +61,7 @@ var SampleProblems1D = []SampleProb1D{
 		// the multiplier value for the star-node's side of the boundary.  For the star node on
 		// the boundary, we need to use the average of k values on each side.
 		Name: "Laplace_Discontin",
-		N:    11, Nnearest: 5, Degree: 3, Support: 1.05, Epsilon: 15,
+		N:    11, Nnearest: 3, Degree: 2, Support: 1.05, Epsilon: 15,
 		Min: 0, Max: 1,
 		Kernel: Kernel{
 			LHS: NewKernelMult(LaplaceU{}, &BoxLocation{
