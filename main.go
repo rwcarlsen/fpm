@@ -40,23 +40,27 @@ func main() {
 }
 
 func InterfaceProblem() {
-	basisfn := &BasisFunc{Dim: 2, Degree: 2}
-	kernel := Kernel{
-		LHS: NewKernelSum(LaplaceUSpace{}, NewKernelMult(ConstKernel(-1), GradientNTime(1))),
-		RHS: ConstKernel(0),
-	}
-
 	nt := 10
 	nx := 10
 	xmin := 0.0
 	xmax := 1.0
 	tmin := 0.0
 	tmax := 1.0
+	nneighbors := 7
+	degree := 2
+	support := 1.05
+	epsilon := 15.0
 
 	mins := []float64{tmin, xmin}
 	maxes := []float64{tmax, xmax}
 	dims := []int{nt, nx}
 	perms := Permute(0, dims...)
+
+	basisfn := &BasisFunc{Dim: 2, Degree: degree}
+	kernel := Kernel{
+		LHS: NewKernelSum(LaplaceUSpace{}, NewKernelMult(ConstKernel(-1), GradientNTime(1))),
+		RHS: ConstKernel(0),
+	}
 
 	debug("points:\n")
 	pts := make([]*Point, len(perms))
@@ -81,7 +85,8 @@ func InterfaceProblem() {
 		}
 	}
 
-	points.ComputeNeighbors(&NearestN{N: 4, Epsilon: 15, Support: 1.05})
+	points.ComputeNeighbors(&NearestN{N: nneighbors, Epsilon: epsilon, Support: support})
+
 	err := Solve(points, kernel, bounds)
 	if err != nil {
 		log.Fatal(err)

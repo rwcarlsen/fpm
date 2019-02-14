@@ -126,11 +126,15 @@ func (p *Point) LambdaMatrix() *mat64.Dense {
 			A.Set(k, i, p.weights[k]*p.Basis.MonomialVal(i, xrel))
 		}
 	}
+	debug("pre-lambda X=\n% .3v\n", mat64.Formatted(A))
+	debug("cond=%v\n", mat64.Cond(A, 2))
 
 	var tmp mat64.Dense
 	tmp.Mul(A.T(), A)
 
 	var lambda mat64.Dense
+	debug("uninverted lambda=\n% .3v\n", mat64.Formatted(&tmp))
+	debug("cond=%v\n", mat64.Cond(&tmp, 2))
 	err := lambda.Solve(&tmp, A.T())
 	if err != nil {
 		panic(err)
