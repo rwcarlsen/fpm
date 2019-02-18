@@ -52,27 +52,6 @@ func (k KernelSum) Compute(kp *KernelParams) float64 {
 	return tot
 }
 
-// TODO: In order to handle discontinuities between regions of the problem domain, we need to be
-// able to allow users to specify different regions of the problem  in a way that allows defining
-// (star) point neighborhoods to be limited to points that are within the star point's region.
-// Also we need to be able to specify special kernels that are used for star points that are
-// located on the boundary between regions.  These boundary star points should basically have no
-// points in their neighborhood and also need to be in the neighborhoods of star points on all
-// bordering regions.  This should resolve solution artifacts and conditioning issues related to
-// discontinuities and also fix issues caused mucking around with star-node support range in order
-// to try to fix discontinuity weirdness.
-//
-// I think this should solve the problem if the star node is on an interface between
-// subdomains - to compute the linear system matrix entries for it and its neighbors:
-//     - If the star node is on an interface between subdomains:
-//         - for neighbors, use the value of kernels in the region of the neighbor's coordinates.
-//         - for the star node, use the average value of the kernel contribution from all bordering subdomains
-//     - If the star node is not on an interface:
-//         - for the star node, use the normal/only kernel value
-//         - for neighbor nodes:
-//             - on an interface use the kernel value for the star node's subdomain
-//             - otherwise just use the node's normal/only kernel value
-
 type KernelMult []KernelTerm
 
 func NewKernelMult(terms ...KernelTerm) KernelMult { return KernelMult(terms) }
